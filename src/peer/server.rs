@@ -22,7 +22,6 @@ fn handle_connection(mut stream: TcpStream) {
             _ => String::from("")
         });
     loop {
-        // TODO: 
         match body.next() {
             Some(msg) => println!("{}", msg),
             _ => {}
@@ -51,7 +50,7 @@ impl Server {
 
     pub fn start(&self, executor_count: usize) {
         let mut threadpool = Threadpool::new(executor_count);
-        for mut stream in self.listener.incoming() {
+        for stream in self.listener.incoming() {
             match stream {
                 Result::Ok(stream) => {
                     threadpool.execute(move || {
