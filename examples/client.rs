@@ -15,6 +15,7 @@ fn main() {
         .expect("Something broke. Try again!");
     println!("--------");
     name = name.trim().to_string();
+    // TODO: Move this logic to a thread
     let connect = TcpStream::connect(socket.as_str());
     match connect {
         Ok(mut stream) => {

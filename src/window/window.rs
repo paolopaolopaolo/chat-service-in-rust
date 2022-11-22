@@ -1,0 +1,246 @@
+
+use std::{
+    io::{Write, stdout, Stdout},
+    sync::mpsc::{self, Receiver, Sender},
+    thread::{self, JoinHandle},
+};
+use crossterm::{
+    execute,
+    queue,
+    style::{
+        Print,
+    },
+    cursor:: {
+        Hide,
+        MoveTo,
+        MoveToNextLine,
+    },
+    terminal::{
+        SetSize, ClearType, Clear, enable_raw_mode, disable_raw_mode,
+    }
+};
+
+/**
+ * Chat Window UI
+ * 
+ * ┌────────────────────────────────────────────────────────────────────────────────────┐
+ * │  (name)> H_PADDING = 2 chars; V_PADDING = 1;                                       │                              
+ * ├────────────────────────────────────────────────────────────────────────────────────┤
+ * │  <user-input text appears here>                                                    │
+ * └────────────────────────────────────────────────────────────────────────────────────┘
+ */
+
+const MAX_WINDOW_WIDTH: u16 = 85;
+const MAX_WINDOW_HEIGHT: u16 = 25;
+const H_PADDING: u16 = 2; 
+const TL_CORNER: char = '┌';
+const TR_CORNER: char = '┐'; 
+const BL_CORNER: char = '└';
+const BR_CORNER: char = '┘';
+const VERT_EDGE: char = '│';
+const HORI_EDGE: char = '─';
+const LVDIV_EDGE: char = '├';
+const RVDIV_EDGE: char = '┤';
+const MAX_HLINE_LENGTH: u16 = MAX_WINDOW_WIDTH - 2u16 * H_PADDING;
+const MAX_VLINE_LENGTH: u16 = MAX_WINDOW_HEIGHT - 2u16;
+
+
+/**
+ * When SliceIndex changes values, we want it to "emit" an event with the changed value.
+**/
+struct SliceIndex {
+    pub from: usize,
+    pub to: usize,
+    tx: Sender<(usize, usize)>
+}
+
+impl SliceIndex {
+    pub fn new(from: usize, to: usize, tx: Sender<(usize, usize)>) -> SliceIndex {
+        SliceIndex {
+            from,
+            to,
+            tx,
+        }
+    }
+
+    pub fn change(&mut self, from: usize, to: usize) {
+        self.from = from;
+        self.to = to;
+        self.tx.send((from, to));
+    }
+}
+
+pub struct ChatWindow {
+    text: Vec<String>,
+    current_slice: SliceIndex,
+    rx: Receiver<(usize, usize)>
+}
+
+pub fn vec_char_to_string(vec_char: Vec<char>) -> String {
+    vec_char.iter()
+    .map(|x| x.to_string())
+    .collect::<String>()
+}
+
+pub fn reset_screen(stdout: &mut Stdout) {
+    execute!(
+        stdout,
+        Clear(ClearType::All),
+        Clear(ClearType::Purge),
+        MoveTo(0, 0),
+        SetSize(MAX_WINDOW_WIDTH, MAX_WINDOW_HEIGHT),
+    ).unwrap();
+}
+
+pub fn println(stdout: &mut Stdout, string: String) {
+    queue!(
+        stdout,
+        Print(string),
+        MoveToNextLine(1),
+    ).unwrap();
+}
+
+fn top_line(stdout: &mut Stdout) {
+    let top_bar: String = vec_char_to_string([
+        vec![TL_CORNER],
+        vec![HORI_EDGE; MAX_HLINE_LENGTH as usize],
+        vec![TR_CORNER],
+    ].concat());
+    println(stdout, top_bar);
+}
+
+fn bottom_line(stdout: &mut Stdout) {
+    println(stdout, vec_char_to_string([
+        vec![BL_CORNER],
+        vec![HORI_EDGE; MAX_HLINE_LENGTH as usize],
+        vec![BR_CORNER],
+    ].concat()));
+}
+
+fn empty_line(stdout: &mut Stdout) {
+    println(stdout, vec_char_to_string([
+        vec![VERT_EDGE],
+        vec![' '; MAX_HLINE_LENGTH as usize],
+        vec![VERT_EDGE],
+    ].concat()));
+}
+
+
+/**
+ * Behaviors we want:
+ * 1. Create a new window (hides everything and instantiates basics)
+ * 2. Adding a new line of text
+ *  a. If text buffer is full, add the line and "scroll down" a line (start index + 1, end index = end)
+ *  b. If text buffer is empty, don't touch current slice.
+ * 3. Handle up/down key interactions
+ *  a. If up, move start index up one and end index up one
+ *  b. If down, move start index down one and end index down one
+ *  c. Disable if we're at the top or bottom (start index = 0 or end index = text.len() - 1)
+ */
+impl ChatWindow {
+    pub fn new() -> ChatWindow {
+        execute!(stdout(), Hide);
+        // TODO: setup way for us to listen to changes on current_slice
+        let (tx, rx) = mpsc::channel();
+        ChatWindow {
+            text: vec![],
+            current_slice: SliceIndex::new(0, MAX_HLINE_LENGTH as usize, tx),
+            rx: rx,
+        }
+    }
+
+    // pub fn listen_for_slice_changes(&mut self) {
+    //     let rx = &self.rx;
+    //     thread::spawn(move || {
+    //         loop {
+    //             let result = rx.recv();
+    //             match result {
+    //                 Ok((from, to)) => { self.print_slice(from, to); },
+    //                 _ => (),
+    //             }
+    //         }
+    //     });   
+    // }
+
+    pub fn scroll_up (&mut self) {
+        self.current_slice.change(self.current_slice.from - 1, self.current_slice.to - 1);
+    }
+
+    // TODO: replace .print_slice with changes to current_slice
+    pub fn add_chat_line(&mut self, string: String) {
+        self.text.push(string.clone());
+        if self.text.len() < MAX_VLINE_LENGTH as usize {
+            self.print_slice(0, MAX_VLINE_LENGTH as usize);
+            // self.current_slice.change(0, MAX_VLINE_LENGTH as usize);
+        } else {
+            self.print_slice(self.text.len() - MAX_VLINE_LENGTH as usize, self.text.len());
+            // self.current_slice.change(self.text.len() - MAX_VLINE_LENGTH as usize, self.text.len());
+        }
+    }
+
+pub fn print_slice(&self, start: usize, end: usize) {
+        let mut actual_end = self.text.len();
+        if end < actual_end {
+            actual_end = end;
+        }
+        let slice = &self.text[start..actual_end];
+        let mut stdout = stdout();
+        let mut print_index = 1u16;
+        slice.iter().for_each(|string| {
+            queue!(
+                stdout,
+                MoveTo(0, print_index),
+                Print(vec_char_to_string(
+                    [
+                        vec![VERT_EDGE],
+                        vec![' '; H_PADDING as usize],
+                        string.clone().chars().collect(),
+                        vec![' '; MAX_HLINE_LENGTH as usize - 2usize - string.clone().len()],
+                        vec![VERT_EDGE],
+                    ].concat()
+                )),
+            );
+            print_index += 1;
+        });
+        stdout.flush();
+    }
+
+    pub fn print (&self) {
+        enable_raw_mode().expect("raw mode swap failed");
+        let mut stdout = stdout();
+        reset_screen(&mut stdout);
+        top_line(&mut stdout);
+  
+        let get_text_by_line = |string_line: &String| {
+            let left_padding: u16 = 2;
+            let right_padding: u16 = MAX_HLINE_LENGTH - left_padding - (string_line.len() as u16);
+            let text: String = vec_char_to_string([
+                vec![VERT_EDGE],
+                vec![' '; left_padding as usize],
+                string_line.chars().collect::<Vec<char>>(),
+                vec![' '; right_padding as usize],
+                vec![VERT_EDGE],
+            ].concat());
+            println(&mut stdout, text);
+        };
+        self.text.iter().for_each(get_text_by_line);
+        let mut lines_left = MAX_VLINE_LENGTH;
+        while lines_left > u16::MIN {
+            empty_line(&mut stdout);
+            lines_left -= 1;
+        }
+        println(
+            &mut stdout,
+            vec_char_to_string([
+                vec![LVDIV_EDGE],
+                vec![HORI_EDGE; MAX_HLINE_LENGTH as usize],
+                vec![RVDIV_EDGE],
+            ].concat())
+        );
+        empty_line(&mut stdout);
+        bottom_line(&mut stdout);
+        stdout.flush();
+        disable_raw_mode().expect("raw mode swap failed!");
+    }
+
+}
