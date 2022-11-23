@@ -13,9 +13,42 @@ use std::{
 type TextLog = Arc<Mutex<Vec<String>>>;
 
 pub struct InMemoryChatBuffer {
-    text: TextLog,
+    pub text: TextLog,
     receiver: Receiver<String>,
     sender: Sender<String>,
+}
+
+pub fn create_listener(text: TextLog, socket: &str) {
+    let listener = TcpListener::bind(socket);
+    match listener {
+        Ok(listnr) => {
+            for stream in listnr.incoming() {
+                match stream {
+                    Ok(mut stream_obj) => {
+                        println!("stream connected to 8000");
+                        let mut start_from: usize = 0;
+                        loop {
+                            match text.try_lock() {
+                                Ok(array) => {
+                                    let end_at = array.len();
+                                    if end_at - start_from > usize::MIN {
+                                        println!("start_from: {}, end_at: {}", start_from, end_at);
+                                        println!("ok??? array to print:\n{:?}", array[start_from..end_at].join("\n"));
+                                        stream_obj.write(format!("{}\n", array[start_from..end_at].join("\n")).as_bytes());
+                                        start_from = end_at;
+                                    }
+                                },
+                                _ => { println!("fail, try again"); },
+                            }
+                            thread::sleep(Duration::from_millis(500));
+                        }
+                    },
+                    Err(e) => { println!("Lock failed: {:?}", e)},
+                }
+            }
+        },
+        _ => {},
+    };
 }
 
 impl InMemoryChatBuffer {
@@ -34,24 +67,7 @@ impl InMemoryChatBuffer {
     }
 
     // Create a closure that when called spins up a port (BLOCKING)
-    pub fn create_listener(&self) {
-        let text = self.text.clone();
-        let listener = TcpListener::bind("0.0.0.0:8000");
-        match listener {
-            Ok(listnr) => {
-                for stream in listnr.incoming() {
-                    match stream {
-                        Ok(mut stream_obj) => {
-                            let text_array = text.lock().unwrap();
-                            stream_obj.write_all(text_array.join("\n").as_bytes());
-                        },
-                        _ => {},
-                    }
-                }
-            },
-            _ => {},
-        };
-    }
+    
 
     // Listen for updates to the chatlog (BLOCKING)
     pub fn listen_for_updates(&self) {
