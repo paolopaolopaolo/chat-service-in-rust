@@ -30,18 +30,18 @@ fn handle_connection(stream: Result<TcpStream, Error>, text: TextLog) {
                     Ok(array) => {
                         let end_at = array.len();
                         if end_at - start_from > usize::MIN {
-                            println!("start_from: {}, end_at: {}", start_from, end_at);
-                            println!("ok??? array to print:\n{:?}", array[start_from..end_at].join("\n"));
+                            // println!("start_from: {}, end_at: {}", start_from, end_at);
+                            // println!("ok??? array to print:\n{:?}", array[start_from..end_at].join("\n"));
                             stream_obj.write(format!("{}\n", array[start_from..end_at].join("\n")).as_bytes());
                             start_from = end_at;
                         }
                     },
-                    _ => { println!("fail, try again"); },
+                    _ => { },
                 }
                 thread::sleep(Duration::from_millis(500));
             }
         },
-        Err(e) => { println!("Lock failed: {:?}", e)},
+        Err(e) => { println!("Connection broke: {:?}", e)},
     }
 }
 

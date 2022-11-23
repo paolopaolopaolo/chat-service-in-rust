@@ -1,8 +1,9 @@
 
 use std::{
+    cmp,
     io::{Write, stdout, Stdout},
     sync::mpsc::{self, Receiver, Sender},
-    thread::{self, JoinHandle},
+    thread::{self, JoinHandle}, char::MAX,
 };
 use crossterm::{
     execute,
@@ -31,7 +32,7 @@ use crossterm::{
  */
 
 const MAX_WINDOW_WIDTH: u16 = 85;
-const MAX_WINDOW_HEIGHT: u16 = 25;
+const MAX_WINDOW_HEIGHT: u16 = 10;
 const H_PADDING: u16 = 2; 
 const TL_CORNER: char = '┌';
 const TR_CORNER: char = '┐'; 
@@ -99,6 +100,35 @@ pub fn println(stdout: &mut Stdout, string: String) {
     ).unwrap();
 }
 
+pub fn print_immediately(stdout: &mut Stdout, string: String) {
+    execute!(
+        stdout,
+        Print(string),
+        MoveToNextLine(1),
+    ).unwrap();
+}
+
+pub fn printlns(stdout: &mut Stdout, strings: Vec<String>, start_printidx: &mut u16) {
+    strings.iter().for_each(|string| {
+        queue!(
+            stdout,
+            MoveTo(0, *start_printidx),
+            Print(vec_char_to_string(
+                [
+                    vec![VERT_EDGE],
+                    vec![' '; H_PADDING as usize],
+                    string.chars().collect(),
+                    vec![' '; MAX_HLINE_LENGTH as usize - 2 - string.len()],
+                    vec![VERT_EDGE],
+                ].concat()
+            )),
+            MoveToNextLine(1),
+        );
+        *start_printidx += 1;
+    });
+    
+}
+
 fn top_line(stdout: &mut Stdout) {
     let top_bar: String = vec_char_to_string([
         vec![TL_CORNER],
@@ -124,6 +154,36 @@ fn empty_line(stdout: &mut Stdout) {
     ].concat()));
 }
 
+fn split_long_line(text: &String, prefix: &str) -> Vec<String> {
+    let MAX_LENGTH = MAX_HLINE_LENGTH as usize - 2 - prefix.len();
+    let mut result: Vec<String> = vec![];
+    let mut string_clone = text.clone();
+    let mut start_idx: usize = 0;
+    let mut end_idx: usize = cmp::min(string_clone.len(), MAX_LENGTH);
+    let mut current_buffer: String = string_clone[start_idx..end_idx]
+        .to_string();
+    while current_buffer.len() > usize::MIN {
+        // print_immediately(&mut stdout, current_buffer.clone());
+        if start_idx == 0 {
+            result.push(current_buffer);
+        } else {
+            result.push(format!("{}{}", prefix, current_buffer));
+        }
+        start_idx = end_idx;
+        // FIXME: this is wrong.
+        if end_idx + MAX_LENGTH < string_clone.len() {
+            end_idx += MAX_LENGTH;
+        } else {
+            end_idx = string_clone.len();
+        }
+        current_buffer = string_clone[start_idx..end_idx]
+            .to_string();
+    }
+    result
+}
+
+// TODO:
+// Enforce assumption that all text inputs are less than the MAX length
 fn print_slice(text: &Vec<String>, start: usize, end: usize) {
     let mut actual_end = text.len();
     if end < actual_end {
@@ -133,20 +193,7 @@ fn print_slice(text: &Vec<String>, start: usize, end: usize) {
     let mut stdout = stdout();
     let mut print_index = 1u16;
     text_slice.iter().for_each(|string| {
-        queue!(
-            stdout,
-            MoveTo(0, print_index),
-            Print(vec_char_to_string(
-                [
-                    vec![VERT_EDGE],
-                    vec![' '; H_PADDING as usize],
-                    string.clone().chars().collect(),
-                    vec![' '; MAX_HLINE_LENGTH as usize - 2usize - string.clone().len()],
-                    vec![VERT_EDGE],
-                ].concat()
-            )),
-        );
-        print_index += 1;
+        printlns(&mut stdout, vec![string.clone()], &mut print_index);
     });
     stdout.flush();
 }
@@ -182,7 +229,10 @@ impl ChatWindow {
 
     // TODO: Remove this in favor of pulling text from the ChatBuffer
     pub fn add_chat_line(&mut self, string: String) {
-        self.text.push(string.clone());
+        let lines = split_long_line(&string, "  ");
+        lines.iter().for_each(|line| {
+            self.text.push(line.clone());
+        });
         if self.text.len() < MAX_VLINE_LENGTH as usize {
             // self.print_slice(0, MAX_VLINE_LENGTH as usize);
             self.current_slice.change(&self.text, 0, MAX_VLINE_LENGTH as usize);

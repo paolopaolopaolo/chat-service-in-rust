@@ -15,6 +15,7 @@ pub struct Server {
     // log_path: String
 }
 
+// BLOCKING
 fn handle_connection(mut stream: TcpStream, tx: Sender<String>) {
     let buf_reader = BufReader::new(&mut stream);
     let mut body = buf_reader
