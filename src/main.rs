@@ -1,4 +1,5 @@
 use std::{
+    net::{TcpStream},
     io::{Write, stdout},
     thread,
     sync::{mpsc, Arc, Mutex},
@@ -31,10 +32,9 @@ fn main() {
             };
         }
     });
-    // Artificially creates strings that we should render on the chat window
     // TODO: connect to log_port and listen for traffic on that port.
     let handle2 = thread::spawn(move || {
-        println!("handle2");
+        
         loop {
             // TODO: bind to server-port that returns this data
             thread::sleep(Duration::from_secs(1));
@@ -47,11 +47,8 @@ fn main() {
             tx.send(String::from("Zeke: You're dumb"));
         }
     });
-    // let handle3 = thread::spawn(move || {
-    //     let mut unwrapped_chat_window = slice_listener_clone.lock().unwrap();
-    //     unwrapped_chat_window.listen_for_slice_changes();
-    // });
     // TODO: handle interactions that get sent (use examples/client.rs as a guide)
+    // handle_interactions();
     handle1.join();
     handle2.join();
     // handle3.join();

@@ -11,8 +11,6 @@
 //     ServerError
 // }
 
-
-
 // #[derive(Debug)]
 // pub struct Request {
 //     pub stream: TcpStream,

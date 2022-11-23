@@ -49,31 +49,30 @@ const MAX_VLINE_LENGTH: u16 = MAX_WINDOW_HEIGHT - 2u16;
  * When SliceIndex changes values, we want it to "emit" an event with the changed value.
 **/
 struct SliceIndex {
-    pub from: usize,
-    pub to: usize,
-    tx: Sender<(usize, usize)>
+    from: usize,
+    to: usize,
+    on_change: fn(&Vec<String>, usize, usize),
 }
 
 impl SliceIndex {
-    pub fn new(from: usize, to: usize, tx: Sender<(usize, usize)>) -> SliceIndex {
+    pub fn new(from: usize, to: usize, on_change: fn(&Vec<String>, usize, usize)) -> SliceIndex {
         SliceIndex {
             from,
             to,
-            tx,
+            on_change,
         }
     }
 
-    pub fn change(&mut self, from: usize, to: usize) {
+    pub fn change(&mut self, text: &Vec<String>, from: usize, to: usize) {
         self.from = from;
         self.to = to;
-        self.tx.send((from, to));
+        (self.on_change)(text, from, to);
     }
 }
 
 pub struct ChatWindow {
     text: Vec<String>,
     current_slice: SliceIndex,
-    rx: Receiver<(usize, usize)>
 }
 
 pub fn vec_char_to_string(vec_char: Vec<char>) -> String {
@@ -125,6 +124,32 @@ fn empty_line(stdout: &mut Stdout) {
     ].concat()));
 }
 
+fn print_slice(text: &Vec<String>, start: usize, end: usize) {
+    let mut actual_end = text.len();
+    if end < actual_end {
+        actual_end = end;
+    }
+    let text_slice = &text[start..actual_end];
+    let mut stdout = stdout();
+    let mut print_index = 1u16;
+    text_slice.iter().for_each(|string| {
+        queue!(
+            stdout,
+            MoveTo(0, print_index),
+            Print(vec_char_to_string(
+                [
+                    vec![VERT_EDGE],
+                    vec![' '; H_PADDING as usize],
+                    string.clone().chars().collect(),
+                    vec![' '; MAX_HLINE_LENGTH as usize - 2usize - string.clone().len()],
+                    vec![VERT_EDGE],
+                ].concat()
+            )),
+        );
+        print_index += 1;
+    });
+    stdout.flush();
+}
 
 /**
  * Behaviors we want:
@@ -141,68 +166,30 @@ impl ChatWindow {
     pub fn new() -> ChatWindow {
         execute!(stdout(), Hide);
         // TODO: setup way for us to listen to changes on current_slice
-        let (tx, rx) = mpsc::channel();
         ChatWindow {
             text: vec![],
-            current_slice: SliceIndex::new(0, MAX_HLINE_LENGTH as usize, tx),
-            rx: rx,
+            current_slice: SliceIndex::new(
+                0,
+                MAX_HLINE_LENGTH as usize,
+                print_slice
+            ),
         }
     }
 
-    // pub fn listen_for_slice_changes(&mut self) {
-    //     let rx = &self.rx;
-    //     thread::spawn(move || {
-    //         loop {
-    //             let result = rx.recv();
-    //             match result {
-    //                 Ok((from, to)) => { self.print_slice(from, to); },
-    //                 _ => (),
-    //             }
-    //         }
-    //     });   
-    // }
-
     pub fn scroll_up (&mut self) {
-        self.current_slice.change(self.current_slice.from - 1, self.current_slice.to - 1);
+        self.current_slice.change(&self.text, self.current_slice.from - 1, self.current_slice.to - 1);
     }
 
-    // TODO: replace .print_slice with changes to current_slice
+    // TODO: Remove this in favor of pulling text from the ChatBuffer
     pub fn add_chat_line(&mut self, string: String) {
         self.text.push(string.clone());
         if self.text.len() < MAX_VLINE_LENGTH as usize {
-            self.print_slice(0, MAX_VLINE_LENGTH as usize);
-            // self.current_slice.change(0, MAX_VLINE_LENGTH as usize);
+            // self.print_slice(0, MAX_VLINE_LENGTH as usize);
+            self.current_slice.change(&self.text, 0, MAX_VLINE_LENGTH as usize);
         } else {
-            self.print_slice(self.text.len() - MAX_VLINE_LENGTH as usize, self.text.len());
-            // self.current_slice.change(self.text.len() - MAX_VLINE_LENGTH as usize, self.text.len());
+            // self.print_slice(self.text.len() - MAX_VLINE_LENGTH as usize, self.text.len());
+            self.current_slice.change(&self.text, self.text.len() - MAX_VLINE_LENGTH as usize, self.text.len());
         }
-    }
-
-pub fn print_slice(&self, start: usize, end: usize) {
-        let mut actual_end = self.text.len();
-        if end < actual_end {
-            actual_end = end;
-        }
-        let slice = &self.text[start..actual_end];
-        let mut stdout = stdout();
-        let mut print_index = 1u16;
-        slice.iter().for_each(|string| {
-            queue!(
-                stdout,
-                MoveTo(0, print_index),
-                Print(vec_char_to_string(
-                    [
-                        vec![VERT_EDGE],
-                        vec![' '; H_PADDING as usize],
-                        string.clone().chars().collect(),
-                        vec![' '; MAX_HLINE_LENGTH as usize - 2usize - string.clone().len()],
-                        vec![VERT_EDGE],
-                    ].concat()
-                )),
-            );
-            print_index += 1;
-        });
-        stdout.flush();
     }
 
     pub fn print (&self) {

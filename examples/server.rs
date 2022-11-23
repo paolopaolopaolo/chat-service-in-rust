@@ -1,5 +1,9 @@
 use chat_server::peer::server::Server;
-use std::env::args;
+use chat_server::peer::chatlog::InMemoryChatBuffer;
+use std::{
+    env::args,
+    thread
+};
 
 const DEFAULT_EXECUTOR_COUNT: usize = 20;
 
@@ -13,22 +17,32 @@ fn main() {
         Some(x) => x,
         _ => "9000"
     };
-    let log_port = match cli_args.get(3) {
-        Some(x) => x,
-        _ => "8000"
-    };
-    let executor_count = match cli_args.get(4) {
+
+    let executor_count = match cli_args.get(3) {
         Some(x) => match x.parse::<usize>() {
                 Ok(count) => count,
                 _ => DEFAULT_EXECUTOR_COUNT,
         },
         _ => DEFAULT_EXECUTOR_COUNT,
     };
-
-    let server = Server::new(host, port, Some(log_port));
-
-    match server {
-        Some(server) => { server.start(executor_count); },
-        _ => { println!("Aborted!"); }
-    }
+    let mut chat_buffer = InMemoryChatBuffer::new();
+    let tx = chat_buffer.create_tx();
+    let server = Server::new(host, port);
+   
+    
+    let handle0 = thread::spawn(move || {
+        chat_buffer.listen_for_updates();
+    });
+    // chat_listener();
+    let handle1 = thread::spawn(move || {
+        match server {
+            Some(server) => { server.start(executor_count, tx); },
+            _ => { println!("Aborted!"); }
+        }
+    });
+    // let handle2 = thread::spawn(move|| {
+    //     chat_buffer.create_listener();
+    // });
+    handle0.join();
+    handle1.join();
 }
