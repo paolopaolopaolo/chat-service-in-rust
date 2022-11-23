@@ -1,6 +1,6 @@
 use std::{
-    io::{Write},
-    net::{TcpListener},
+    io::{Write, Error},
+    net::{TcpListener, TcpStream},
     sync::{
         Arc,
         Mutex,
@@ -9,6 +9,7 @@ use std::{
     thread,
     time::Duration
 };
+use crate::threadpool::threadpool::Threadpool;
 
 type TextLog = Arc<Mutex<Vec<String>>>;
 
@@ -18,33 +19,40 @@ pub struct InMemoryChatBuffer {
     sender: Sender<String>,
 }
 
+fn handle_connection(stream: Result<TcpStream, Error>, text: TextLog) {
+    match stream {
+        Ok(mut stream_obj) => {
+            println!("stream connected to 8000");
+            // Adds deduping so we only write what hasn't been written yet.
+            let mut start_from: usize = 0;
+            loop {
+                match text.try_lock() {
+                    Ok(array) => {
+                        let end_at = array.len();
+                        if end_at - start_from > usize::MIN {
+                            println!("start_from: {}, end_at: {}", start_from, end_at);
+                            println!("ok??? array to print:\n{:?}", array[start_from..end_at].join("\n"));
+                            stream_obj.write(format!("{}\n", array[start_from..end_at].join("\n")).as_bytes());
+                            start_from = end_at;
+                        }
+                    },
+                    _ => { println!("fail, try again"); },
+                }
+                thread::sleep(Duration::from_millis(500));
+            }
+        },
+        Err(e) => { println!("Lock failed: {:?}", e)},
+    }
+}
+
 pub fn create_listener(text: TextLog, socket: &str) {
     let listener = TcpListener::bind(socket);
+    let mut tp = Threadpool::new(100);
     match listener {
         Ok(listnr) => {
             for stream in listnr.incoming() {
-                match stream {
-                    Ok(mut stream_obj) => {
-                        println!("stream connected to 8000");
-                        let mut start_from: usize = 0;
-                        loop {
-                            match text.try_lock() {
-                                Ok(array) => {
-                                    let end_at = array.len();
-                                    if end_at - start_from > usize::MIN {
-                                        println!("start_from: {}, end_at: {}", start_from, end_at);
-                                        println!("ok??? array to print:\n{:?}", array[start_from..end_at].join("\n"));
-                                        stream_obj.write(format!("{}\n", array[start_from..end_at].join("\n")).as_bytes());
-                                        start_from = end_at;
-                                    }
-                                },
-                                _ => { println!("fail, try again"); },
-                            }
-                            thread::sleep(Duration::from_millis(500));
-                        }
-                    },
-                    Err(e) => { println!("Lock failed: {:?}", e)},
-                }
+                let cloned_text = text.clone();
+                tp.execute(move || { handle_connection(stream, cloned_text)});
             }
         },
         _ => {},
@@ -72,8 +80,8 @@ impl InMemoryChatBuffer {
     // Listen for updates to the chatlog (BLOCKING)
     pub fn listen_for_updates(&self) {
         for string in self.receiver.iter() {
-            println!("String received: {}", string);
             let handler = &self.text.clone();
+            // TODO: handle this better
             handler.lock().unwrap().push(string);
         }
     }

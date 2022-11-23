@@ -18,6 +18,7 @@ fn main() {
                 let mut buf_array = bufreader
                     .lines()
                     .map(|i| i.unwrap());
+                // This example just prints, but we could have it do something with ChatWindow
                 loop {
                     match buf_array.next() {
                         Some(arr) => { println!("{}", arr); },
