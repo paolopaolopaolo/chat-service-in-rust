@@ -16,8 +16,7 @@ fn main() {
     let socket_feed = match cli_args.get(2) {
         Some(x) => x.clone(),
         _ => String::from("0.0.0.0:8000")
-    };
-    
+    };  
 
     let executor_count = match cli_args.get(3) {
         Some(x) => match x.parse::<usize>() {
@@ -26,11 +25,10 @@ fn main() {
         },
         _ => DEFAULT_EXECUTOR_COUNT,
     };
-    let mut chat_buffer = InMemoryChatBuffer::new();
-    let mut text = chat_buffer.text.clone();
+    let chat_buffer = InMemoryChatBuffer::new();
+    let text = chat_buffer.text.clone();
     let tx = chat_buffer.create_tx();
     let server = Server::new(socket_client);
-   
     
     let handle0 = thread::spawn(move || {
         chat_buffer.listen_for_updates();

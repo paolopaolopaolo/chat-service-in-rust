@@ -38,7 +38,7 @@ use crossterm::{
  */
 
 const MAX_WINDOW_WIDTH: u16 = 85;
-const MAX_WINDOW_HEIGHT: u16 = 25;
+const MAX_WINDOW_HEIGHT: u16 = 10;
 const H_PADDING: u16 = 2; 
 const TL_CORNER: char = '┌';
 const TR_CORNER: char = '┐'; 
@@ -175,11 +175,11 @@ fn empty_line(stdout: &mut Stdout) {
 }
 
 fn split_long_line(text: &String, prefix: &str) -> Vec<String> {
-    let MAX_LENGTH = MAX_HLINE_LENGTH as usize - 2 - prefix.len();
+    let max_length = MAX_HLINE_LENGTH as usize - 2 - prefix.len();
     let mut result: Vec<String> = vec![];
-    let mut string_clone = text.clone();
+    let string_clone = text.clone();
     let mut start_idx: usize = 0;
-    let mut end_idx: usize = cmp::min(string_clone.len(), MAX_LENGTH);
+    let mut end_idx: usize = cmp::min(string_clone.len(), max_length);
     let mut current_buffer: String = string_clone[start_idx..end_idx]
         .to_string();
     while current_buffer.len() > usize::MIN {
@@ -189,8 +189,8 @@ fn split_long_line(text: &String, prefix: &str) -> Vec<String> {
             result.push(format!("{}{}", prefix, current_buffer));
         }
         start_idx = end_idx;
-        if end_idx + MAX_LENGTH < string_clone.len() {
-            end_idx += MAX_LENGTH;
+        if end_idx + max_length < string_clone.len() {
+            end_idx += max_length;
         } else {
             end_idx = string_clone.len();
         }
@@ -261,7 +261,7 @@ pub fn lock_chat_window(chat_window: &SharedChatWindow) -> MutexGuard<ChatWindow
  */
 impl ChatWindow {
     pub fn new(name: String) -> ChatWindow {
-        execute!(stdout(), Hide);
+        execute!(stdout(), Hide).expect("bad things happened");
         // TODO: setup way for us to listen to changes on current_slice
         ChatWindow {
             name: name.clone(),
@@ -336,7 +336,7 @@ impl ChatWindow {
         );
         empty_line(&mut stdout);
         bottom_line(&mut stdout);
-        stdout.flush();
+        stdout.flush().unwrap_or_else(|_| { println!("stout flush failed"); });
         disable_raw_mode().expect("raw mode swap failed!");
     }
 
@@ -391,7 +391,7 @@ impl ChatInput {
                                     match event.code {
                                         KeyCode::Char(char) => {
                                             self.text = format!("{}{}", self.text, char);
-                                            let mut text_to_print = adjust_text_for_overflow(self.text.clone());
+                                            let text_to_print = adjust_text_for_overflow(self.text.clone());
                                             println_starting_at(
                                                 &mut stdout(),
                                                 text_to_print,
@@ -450,7 +450,7 @@ impl ChatInput {
                                         KeyCode::Backspace => {
                                             if self.text.len() > 0 {
                                                 self.text = self.text[0..self.text.len() - 1].to_string();
-                                                let mut text_to_print = adjust_text_for_overflow(self.text.clone());
+                                                let text_to_print = adjust_text_for_overflow(self.text.clone());
                                                 println_starting_at(
                                                     &mut stdout(),
                                                     text_to_print,

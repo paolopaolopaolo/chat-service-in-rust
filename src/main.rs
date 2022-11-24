@@ -2,7 +2,7 @@ use std::{
     env::args,
     sync::{Arc, Mutex, mpsc},
     net::{TcpStream},
-    io::{BufReader, BufRead, stdin, stdout},
+    io::{BufReader, BufRead, stdin},
     thread,
 };
 use chat_server::window::window::{SharedChatWindow, ChatWindow, ChatInput, lock_chat_window, WindowActions};
@@ -19,7 +19,7 @@ fn main() {
     };
     println!("What's your name?");
     let mut name = String::new();
-    stdin().read_line(&mut name);
+    stdin().read_line(&mut name).expect("Name read failed");
     name = name.trim().to_string();
     let connect = TcpStream::connect(socket.as_str());
     let cw: SharedChatWindow = Arc::new(Mutex::new(ChatWindow::new(name.clone())));

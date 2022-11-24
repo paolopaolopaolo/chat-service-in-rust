@@ -1,7 +1,7 @@
 use std::{
     env::args,
     net::{TcpStream},
-    io::{stdin, Write, BufReader, BufRead}
+    io::{BufReader, BufRead}
 };
 
 
