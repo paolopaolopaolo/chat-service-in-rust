@@ -9,14 +9,15 @@ const DEFAULT_EXECUTOR_COUNT: usize = 20;
 
 fn main() {
     let cli_args: Vec<String> = args().collect();
-    let host = match cli_args.get(1) {
+    let socket_client = match cli_args.get(1) {
         Some(x) => x,
-        _ => "0.0.0.0"
+        _ => "0.0.0.0:9000"
     };
-    let port = match cli_args.get(2) {
-        Some(x) => x,
-        _ => "9000"
+    let socket_feed = match cli_args.get(2) {
+        Some(x) => x.clone(),
+        _ => String::from("0.0.0.0:8000")
     };
+    
 
     let executor_count = match cli_args.get(3) {
         Some(x) => match x.parse::<usize>() {
@@ -28,23 +29,20 @@ fn main() {
     let mut chat_buffer = InMemoryChatBuffer::new();
     let mut text = chat_buffer.text.clone();
     let tx = chat_buffer.create_tx();
-    let server = Server::new(host, port);
+    let server = Server::new(socket_client);
    
     
     let handle0 = thread::spawn(move || {
-        println!("chat buffer listening for updates");
         chat_buffer.listen_for_updates();
     });
     let handle1 = thread::spawn(move || {
-        println!("server started");
         match server {
             Some(server) => { server.start(executor_count, tx); },
             _ => { println!("Aborted!"); }
         }
     });
     let handle2 = thread::spawn(move|| {
-        println!("listener create");
-        create_listener(text, "0.0.0.0:8000");
+        create_listener(text, socket_feed.clone().as_str());
     });
     handle0.join().expect("handle0 fail");
     handle1.join().expect("handle1 fail");

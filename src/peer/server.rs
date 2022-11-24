@@ -3,15 +3,14 @@ use std::{
     thread,
     sync::mpsc::{self, Sender, Receiver},
     io::{BufReader, BufRead, Write},
-    net::{TcpListener, TcpStream},
+    net::{TcpListener, TcpStream, Shutdown},
     result::Result,
 };
 
 use crate::threadpool::threadpool::Threadpool;
 
 pub struct Server {
-    host: String,
-    port: String,
+    socket: String,
     // log_path: String
 }
 
@@ -30,27 +29,28 @@ fn handle_connection(mut stream: TcpStream, tx: Sender<String>) {
                 Ok(()) => { println!("message sent"); }
                 Err(e) => {println!("message send failed: {:?}", e); break; }
             }},
-            _ => { println!("connection broken!"); break; },
+            _ => { 
+                println!("connection broken!"); 
+                break; 
+            },
         };
     }
 }
 
 impl Server {
 
-    pub fn new(host: &str, port: &str) -> Option<Server> {
+    pub fn new(socket: &str) -> Option<Server> {
         Some(Server {
-            host: String::from(host),
-            port: String::from(port),
+            socket: String::from(socket),
         })
     }
 
     pub fn start(&self, executor_count: usize, tx: Sender<String>) {
         let mut threadpool = Threadpool::new(executor_count);
-        let listener = TcpListener::bind(format!("{}:{}", self.host, self.port));
+        let listener = TcpListener::bind(self.socket.clone());
         match listener {
             Ok(listener) => {
                 for stream in listener.incoming() {
-                    println!("9000 stream accepted");
                     match stream {
                         Result::Ok(stream) => {
                             let tx_main = tx.clone();

@@ -5,9 +5,7 @@ use std::{
         Arc,
         Mutex,
         mpsc::{self, Receiver, Sender},
-    },
-    thread,
-    time::Duration
+    }
 };
 use crate::threadpool::threadpool::Threadpool;
 
@@ -19,10 +17,9 @@ pub struct InMemoryChatBuffer {
     sender: Sender<String>,
 }
 
-fn handle_connection(stream: Result<TcpStream, Error>, text: TextLog) {
+fn handle_connection(stream: Result<TcpStream, Error>, text: TextLog) -> Result<(), ()> {
     match stream {
         Ok(mut stream_obj) => {
-            println!("stream connected to 8000");
             // Adds deduping so we only write what hasn't been written yet.
             let mut start_from: usize = 0;
             loop {
@@ -30,29 +27,38 @@ fn handle_connection(stream: Result<TcpStream, Error>, text: TextLog) {
                     Ok(array) => {
                         let end_at = array.len();
                         if end_at - start_from > usize::MIN {
-                            // println!("start_from: {}, end_at: {}", start_from, end_at);
-                            // println!("ok??? array to print:\n{:?}", array[start_from..end_at].join("\n"));
-                            stream_obj.write(format!("{}\n", array[start_from..end_at].join("\n")).as_bytes());
+                            match stream_obj.write(
+                                format!(
+                                    "{}\n",
+                                    array[start_from..end_at].join("\n")
+                                ).as_bytes()) {
+                                Err(err) => {
+                                    println!("chatlog.rs:39 {:?}", err);
+                                    break;
+                                },
+                                _ => {}
+                            }
+                            ;
                             start_from = end_at;
                         }
                     },
                     _ => { },
                 }
-                thread::sleep(Duration::from_millis(500));
             }
         },
-        Err(e) => { println!("Connection broke: {:?}", e)},
+        Err(e) => { println!("chatlog.rs:49 Connection broke: {:?}", e)},
     }
+    Ok(())
 }
 
 pub fn create_listener(text: TextLog, socket: &str) {
     let listener = TcpListener::bind(socket);
-    let mut tp = Threadpool::new(100);
+    let mut tp = Threadpool::new(10000);
     match listener {
         Ok(listnr) => {
             for stream in listnr.incoming() {
                 let cloned_text = text.clone();
-                tp.execute(move || { handle_connection(stream, cloned_text)});
+                tp.execute(move || { handle_connection(stream, cloned_text); });
             }
         },
         _ => {},
@@ -74,15 +80,14 @@ impl InMemoryChatBuffer {
         self.sender.clone()
     }
 
-    // Create a closure that when called spins up a port (BLOCKING)
-    
-
     // Listen for updates to the chatlog (BLOCKING)
     pub fn listen_for_updates(&self) {
         for string in self.receiver.iter() {
-            let handler = &self.text.clone();
             // TODO: handle this better
-            handler.lock().unwrap().push(string);
+            match self.text.clone().lock() {
+                Ok(mut arr) => { arr.push(string); },
+                _ => { println!("Lock failed when listening for updates"); }
+            }
         }
     }
 }
