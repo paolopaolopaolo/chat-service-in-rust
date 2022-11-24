@@ -1,9 +1,8 @@
 
 use std::{
-    thread,
-    sync::mpsc::{self, Sender, Receiver},
-    io::{BufReader, BufRead, Write},
-    net::{TcpListener, TcpStream, Shutdown},
+    sync::mpsc::Sender,
+    io::{BufReader, BufRead},
+    net::{TcpListener, TcpStream},
     result::Result,
 };
 

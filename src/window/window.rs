@@ -3,7 +3,9 @@ use std::{
     cmp,
     io::{Write, stdout, Stdout},
     net::TcpStream, vec,
-    sync::{mpsc::{self, Receiver, Sender}}
+    sync::{mpsc::Sender, MutexGuard, Arc, Mutex},
+    thread,
+    time::Duration,
 };
 use crossterm::{
     execute,
@@ -51,6 +53,7 @@ const RVDIV_EDGE: char = '┤';
 const MAX_HLINE_LENGTH: u16 = MAX_WINDOW_WIDTH - 2u16 * H_PADDING;
 const MAX_VLINE_LENGTH: u16 = MAX_WINDOW_HEIGHT - 2u16;
 
+pub type SharedChatWindow = Arc<Mutex<ChatWindow>>;
 
 /**
  * When SliceIndex changes values, we want it to "emit" an event with the changed value.
@@ -142,7 +145,7 @@ pub fn printlns(stdout: &mut Stdout, strings: Vec<String>, start_printidx: &mut 
                 ].concat()
             )),
             MoveToNextLine(1),
-        );
+        ).expect("Error queueing terminal command.");
         *start_printidx += 1;
     });
     
@@ -207,29 +210,23 @@ fn print_slice(text: &Vec<String>, start: usize, end: usize) {
     }
     let text_slice = &text[start..actual_end];
     let mut stdout = stdout();
-    let mut print_index = 1u16;
+    let mut print_index = 2u16;
     text_slice.iter().for_each(|string| {
         printlns(&mut stdout, vec![string.clone()], &mut print_index);
     });
-    stdout.flush();
+    stdout.flush().unwrap();
 }
 
 pub enum WindowActions {
     ScrollUp
 }
 
-pub fn set_up_input_to_window_listener(chat_window: &mut ChatWindow) -> Sender<WindowActions> {
-    let (tx, rx) = mpsc::channel();
-
-    for received in rx.recv() {
-        match received {
-            WindowActions::ScrollUp => {
-                chat_window.scroll_up();
-            },
-            _ => {}
-        }
+// Blocking call to get a working chat_window
+pub fn lock_chat_window<'a>(chat_window: &'a SharedChatWindow) -> MutexGuard<ChatWindow> {
+    match chat_window.lock() {
+        Ok(lock) => lock,
+        _ => panic!("the world is on fire"),
     }
-    tx
 }
 
 /**
@@ -281,7 +278,7 @@ impl ChatWindow {
         enable_raw_mode().expect("raw mode swap failed");
         let mut stdout = stdout();
         reset_screen(&mut stdout);
-        // println(&mut stdout, self.name.clone());
+        println(&mut stdout, self.name.clone());
         top_line(&mut stdout);
   
         let get_text_by_line = |string_line: &String| {
@@ -332,9 +329,9 @@ impl ChatInput {
     }
 
     // BLOCKING
-    pub fn capture_events(&mut self, socket: &str) {
-        let START_AT_ROW = MAX_VLINE_LENGTH + 2;
-        let START_AT_COLUMN = 0;
+    pub fn capture_events(&mut self, socket: &str, tx: Sender<WindowActions>) {
+        let start_at_row = MAX_VLINE_LENGTH + 3;
+        let start_at_column = 0;
         enable_raw_mode().expect("enable raw mode failed");
         let stream = TcpStream::connect(socket);
 
@@ -370,36 +367,37 @@ impl ChatInput {
                                             println_starting_at(
                                                 &mut stdout(),
                                                 self.text.clone(),
-                                                START_AT_ROW,
-                                                START_AT_COLUMN
+                                                start_at_row,
+                                                start_at_column
                                             );
                                         },
                                         KeyCode::Left => {
                                             println_starting_at(&mut stdout(), 
                                                 "Left Key Pressed!".to_string(), 
-                                                START_AT_ROW + 10, 
-                                                START_AT_COLUMN
+                                                start_at_row + 10, 
+                                                start_at_column
                                             );
                                         },
                                         KeyCode::Right => {
                                             println_starting_at(&mut stdout(), 
                                                 "Right Key Pressed!".to_string(), 
-                                                START_AT_ROW + 10, 
-                                                START_AT_COLUMN
+                                                start_at_row + 10, 
+                                                start_at_column
                                             );
                                         },
                                         KeyCode::Up => {
+                                            tx.send(WindowActions::ScrollUp).unwrap();
                                             println_starting_at(&mut stdout(), 
                                                 "Up Key Pressed!".to_string(), 
-                                                START_AT_ROW + 10, 
-                                                START_AT_COLUMN
+                                                start_at_row + 10, 
+                                                start_at_column
                                             );
                                         },
                                         KeyCode::Down => {
                                             println_starting_at(&mut stdout(), 
                                                 "Down Key Pressed!".to_string(), 
-                                                START_AT_ROW + 10, 
-                                                START_AT_COLUMN
+                                                start_at_row + 10, 
+                                                start_at_column
                                             );
                                         },
                                         KeyCode::Enter => {
@@ -410,8 +408,8 @@ impl ChatInput {
                                             println_starting_at(
                                                 &mut stdout(),
                                                 self.text.clone(),
-                                                START_AT_ROW,
-                                                START_AT_COLUMN
+                                                start_at_row,
+                                                start_at_column
                                             );
                                         },
                                         KeyCode::Backspace => {
@@ -420,16 +418,16 @@ impl ChatInput {
                                             println_starting_at(
                                                 &mut stdout(),
                                                 self.text.clone(),
-                                                START_AT_ROW,
-                                                START_AT_COLUMN
+                                                start_at_row,
+                                                start_at_column
                                             );
                                         }
                                         _ => {
                                             // println_starting_at(
                                             //     &mut stdout(),
                                             //     format!("event: {:?}", event),
-                                            //     START_AT_ROW,
-                                            //     START_AT_COLUMN
+                                            //     start_at_row,
+                                            //     start_at_column
                                             // );
                                         },
                                     }
@@ -445,8 +443,8 @@ impl ChatInput {
                 println_starting_at(
                     &mut stdout(),
                     format!("socket_failed: {:?}", err),
-                    START_AT_ROW + 10,
-                    START_AT_COLUMN
+                    start_at_row + 10,
+                    start_at_column
                 );
             },
         }

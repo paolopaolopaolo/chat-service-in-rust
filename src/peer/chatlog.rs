@@ -58,7 +58,9 @@ pub fn create_listener(text: TextLog, socket: &str) {
         Ok(listnr) => {
             for stream in listnr.incoming() {
                 let cloned_text = text.clone();
-                tp.execute(move || { handle_connection(stream, cloned_text); });
+                tp.execute(move || { 
+                    handle_connection(stream, cloned_text).expect("Connection failed");
+                });
             }
         },
         _ => {},
