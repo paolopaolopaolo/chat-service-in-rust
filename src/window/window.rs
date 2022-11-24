@@ -5,6 +5,7 @@ use std::{
     net::TcpStream, vec,
     sync::{mpsc::Sender, MutexGuard, Arc, Mutex}
 };
+
 use crossterm::{
     execute,
     queue,
@@ -18,14 +19,14 @@ use crossterm::{
     },
     event::{
         Event,
-        KeyCode,
         read,
-        KeyModifiers,
     },
     terminal::{
         SetSize, ClearType, Clear, enable_raw_mode, disable_raw_mode,
     }
 };
+
+use super::handlers::{handle_modified_keys, handle_key_codes};
 
 /**
  * Chat Window UI
@@ -37,7 +38,7 @@ use crossterm::{
  * └────────────────────────────────────────────────────────────────────────────────────┘
  */
 
-const MAX_WINDOW_WIDTH: u16 = 85;
+const MAX_WINDOW_WIDTH: u16 = 65;
 const MAX_WINDOW_HEIGHT: u16 = 10;
 const H_PADDING: u16 = 2; 
 const TL_CORNER: char = '┌';
@@ -51,11 +52,15 @@ const RVDIV_EDGE: char = '┤';
 const MAX_HLINE_LENGTH: u16 = MAX_WINDOW_WIDTH - 2u16 * H_PADDING;
 const MAX_VLINE_LENGTH: u16 = MAX_WINDOW_HEIGHT - 2u16;
 
+/**
+ * Types
+ */
+
 pub type SharedChatWindow = Arc<Mutex<ChatWindow>>;
 
 /**
- * When SliceIndex changes values, we want it to "emit" an event with the changed value.
-**/
+ * An Index Slice that runs an on-change function when it changes
+ **/
 #[derive(Copy, Clone)]
 struct SliceIndex {
     from: usize,
@@ -64,7 +69,7 @@ struct SliceIndex {
 }
 
 impl SliceIndex {
-
+    // Instantiates new SliceIndex
     pub fn new(from: usize, to: usize, on_change: fn(&Vec<String>, usize, usize)) -> SliceIndex {
         SliceIndex {
             from,
@@ -73,6 +78,7 @@ impl SliceIndex {
         }
     }
 
+    // Change the index with this method to trigger on_change
     pub fn change(&mut self, text: &Vec<String>, from: usize, to: usize) {
         self.from = from;
         self.to = to;
@@ -80,19 +86,36 @@ impl SliceIndex {
     }
 }
 
+#[derive(Copy, Clone)]
+struct Dimensions {
+    width: usize,
+    height: usize,
+}
+
+
+/**
+ * Chat Feed UI
+ **/
 #[derive(Clone)]
 pub struct ChatWindow {
     name: String,
     pub text: Vec<String>,
+    dimensions: Dimensions,
     current_slice: SliceIndex,
 }
 
+/**
+ * Macro-like methods
+ */
+
+// Convert a vector of characters to a string 
 pub fn vec_char_to_string(vec_char: Vec<char>) -> String {
     vec_char.iter()
     .map(|x| x.to_string())
     .collect::<String>()
 }
 
+// Clear the screen and reset everything
 pub fn reset_screen(stdout: &mut Stdout) {
     execute!(
         stdout,
@@ -103,6 +126,7 @@ pub fn reset_screen(stdout: &mut Stdout) {
     ).unwrap();
 }
 
+// Print in place and move down a line
 pub fn println(stdout: &mut Stdout, string: String) {
     queue!(
         stdout,
@@ -111,6 +135,7 @@ pub fn println(stdout: &mut Stdout, string: String) {
     ).unwrap();
 }
 
+// Print at a given location, overwriting the line previously
 pub fn println_starting_at(stdout: &mut Stdout, string: String, start_at: u16, start_at_col: u16) {
     execute!(
         stdout,
@@ -125,9 +150,9 @@ pub fn println_starting_at(stdout: &mut Stdout, string: String, start_at: u16, s
         ].concat())),
         MoveToNextLine(1)
     ).unwrap();
-    bottom_line(stdout);
 }
 
+// Print multiple lines (from within a chat-feed)
 pub fn printlns(stdout: &mut Stdout, strings: Vec<String>, start_printidx: &mut u16) {
     strings.iter().for_each(|string| {
         queue!(
@@ -149,6 +174,7 @@ pub fn printlns(stdout: &mut Stdout, strings: Vec<String>, start_printidx: &mut 
     
 }
 
+// Print the top line of the chat-feed
 fn top_line(stdout: &mut Stdout) {
     let top_bar: String = vec_char_to_string([
         vec![TL_CORNER],
@@ -158,6 +184,7 @@ fn top_line(stdout: &mut Stdout) {
     println(stdout, top_bar);
 }
 
+// Print the bottom line of the chat-input
 fn bottom_line(stdout: &mut Stdout) {
     println(stdout, vec_char_to_string([
         vec![BL_CORNER],
@@ -166,6 +193,7 @@ fn bottom_line(stdout: &mut Stdout) {
     ].concat()));
 }
 
+// Print an empty line within the chat-feed
 fn empty_line(stdout: &mut Stdout) {
     println(stdout, vec_char_to_string([
         vec![VERT_EDGE],
@@ -174,6 +202,7 @@ fn empty_line(stdout: &mut Stdout) {
     ].concat()));
 }
 
+// Split a string that is long into multiple strings
 fn split_long_line(text: &String, prefix: &str) -> Vec<String> {
     let max_length = MAX_HLINE_LENGTH as usize - 2 - prefix.len();
     let mut result: Vec<String> = vec![];
@@ -200,7 +229,8 @@ fn split_long_line(text: &String, prefix: &str) -> Vec<String> {
     result
 }
 
-// Has assumption that all text inputs are less than the MAX length
+// Print within a chatfeed with assumption that all text 
+// inputs are less than the MAX length
 fn print_slice(text: &Vec<String>, start: usize, end: usize) {
     let mut actual_end = text.len();
     if end < actual_end {
@@ -215,7 +245,7 @@ fn print_slice(text: &Vec<String>, start: usize, end: usize) {
     stdout.flush().unwrap();
 }
 
-fn adjust_text_for_overflow(copy: String) -> String {
+pub fn adjust_text_for_overflow(copy: String) -> String {
     let max_input_length = MAX_HLINE_LENGTH as usize - 4;
     let mut text_to_print = copy.clone();
     if text_to_print.len() > max_input_length {
@@ -225,14 +255,7 @@ fn adjust_text_for_overflow(copy: String) -> String {
     text_to_print
 }
 
-pub enum WindowActions {
-    ScrollUp,
-    ScrollDown,
-    CursorLeft,
-    CursorRight,
-}
-
-// Blocking call to get a working chat_window
+// Blocking call to get a Mutex-locked Chat-Feed struct
 pub fn lock_chat_window(chat_window: &SharedChatWindow) -> MutexGuard<ChatWindow> {
     let mut result = None;
     let mut count = 0;
@@ -245,15 +268,28 @@ pub fn lock_chat_window(chat_window: &SharedChatWindow) -> MutexGuard<ChatWindow
             },
         }
     }
+    // This works because the loop above will repeat otherwise
     result.unwrap()
 }
 
 /**
- * Behaviors we want:
- * 1. Create a new window (hides everything and instantiates basics)
- * 2. Adding a new line of text
- *  a. If text buffer is full, add the line and "scroll down" a line (start index + 1, end index = end)
- *  b. If text buffer is empty, don't touch current slice.
+ * Enums
+ */
+
+pub enum WindowActions {
+    ScrollUp,
+    ScrollDown,
+    CursorLeft,
+    CursorRight,
+}
+
+
+/**
+ * Chat feed with the following
+ * 1. Creates a new window (hides everything and instantiates basics)
+ * 2. Adds a new line of text
+ *  a. If text buffer is full, adds the line and "scrolls down" by shifting the current slice downwards
+ *  b. If text buffer is not full, the current slice is maintained.
  * 3. Handle up/down key interactions
  *  a. If up, move start index up one and end index up one
  *  b. If down, move start index down one and end index down one
@@ -271,8 +307,13 @@ impl ChatWindow {
                 MAX_HLINE_LENGTH as usize,
                 print_slice
             ),
+            dimensions: Dimensions { width: MAX_WINDOW_WIDTH as usize, height: MAX_WINDOW_HEIGHT as usize }
         }
     }
+
+    /**
+     * Window actions
+     */
 
     pub fn scroll_up (&mut self) {
         if self.current_slice.from - 1 > usize::MIN {
@@ -293,10 +334,8 @@ impl ChatWindow {
             self.text.push(line.clone());
         });
         if self.text.len() < MAX_VLINE_LENGTH as usize {
-            // self.print_slice(0, MAX_VLINE_LENGTH as usize);
             self.current_slice.change(&self.text, 0, MAX_VLINE_LENGTH as usize);
         } else {
-            // self.print_slice(self.text.len() - MAX_VLINE_LENGTH as usize, self.text.len());
             self.current_slice.change(&self.text, self.text.len() - MAX_VLINE_LENGTH as usize, self.text.len());
         }
     }
@@ -343,8 +382,8 @@ impl ChatWindow {
 }
 
 pub struct ChatInput {
-    text: String,
-    name: String
+    pub text: String,
+    pub name: String
 }
 
 impl ChatInput {
@@ -369,105 +408,16 @@ impl ChatInput {
                         Ok(ev) => {
                             match ev {
                                 Event::Key(event) => {
-                                    match event.modifiers {
-                                        KeyModifiers::CONTROL => {
-                                            match event.code {
-                                                KeyCode::Char(char) => {
-                                                    match char {
-                                                        'c' => {
-                                                            execute!(stdout(), Clear(ClearType::All)).unwrap();
-                                                            disable_raw_mode().expect("error with disable raw mode");
-                                                            stream.shutdown(std::net::Shutdown::Both).expect("Shutdown failed");
-                                                            println!("CTRL+C to exit");
-                                                        },
-                                                        _ => {}
-                                                    }
-                                                }
-                                                _ => {},
-                                            }
-                                        },
-                                        _ => {}
-                                    }
-                                    match event.code {
-                                        KeyCode::Char(char) => {
-                                            self.text = format!("{}{}", self.text, char);
-                                            let text_to_print = adjust_text_for_overflow(self.text.clone());
-                                            println_starting_at(
-                                                &mut stdout(),
-                                                text_to_print,
-                                                start_at_row,
-                                                start_at_column
-                                            );
-                                        },
-                                        KeyCode::Up => {
-                                            tx.send(WindowActions::ScrollUp).unwrap_or_else(|err| {
-                                                println_starting_at(&mut stdout(), 
-                                                format!("Error! {err}"), 
-                                                start_at_row + 10, 
-                                                start_at_column
-                                            );
-                                            });
-                                        },
-                                        KeyCode::Down => {
-                                            tx.send(WindowActions::ScrollDown).unwrap_or_else(|err| {
-                                                println_starting_at(&mut stdout(), 
-                                                format!("Error! {err}"), 
-                                                start_at_row + 10, 
-                                                start_at_column
-                                            );
-                                            });
-                                        },
-                                        KeyCode::Left => {
-                                            tx.send(WindowActions::CursorLeft).unwrap_or_else(|err| {
-                                                println_starting_at(&mut stdout(), 
-                                                format!("Error! {err}"), 
-                                                start_at_row + 10, 
-                                                start_at_column
-                                            );
-                                            });
-                                        },
-                                        KeyCode::Right => {
-                                            tx.send(WindowActions::CursorRight).unwrap_or_else(|err| {
-                                                println_starting_at(&mut stdout(), 
-                                                format!("Error! {err}"), 
-                                                start_at_row + 10, 
-                                                start_at_column
-                                            );
-                                            });
-                                        },
-                                        KeyCode::Enter => {
-                                            let target_string = format!("\r\n{}: {}\r\n", self.name.clone(), self.text.clone());
-                                            stream.write(target_string.as_bytes()).expect("write failed");
-                                            self.text = "".to_string();
-        
-                                            println_starting_at(
-                                                &mut stdout(),
-                                                self.text.clone(),
-                                                start_at_row,
-                                                start_at_column
-                                            );
-                                        },
-                                        KeyCode::Backspace => {
-                                            if self.text.len() > 0 {
-                                                self.text = self.text[0..self.text.len() - 1].to_string();
-                                                let text_to_print = adjust_text_for_overflow(self.text.clone());
-                                                println_starting_at(
-                                                    &mut stdout(),
-                                                    text_to_print,
-                                                    start_at_row,
-                                                    start_at_column
-                                                );
-                                            }
-                                        }
-                                        _ => {
-                                            // println_starting_at(
-                                            //     &mut stdout(),
-                                            //     format!("event: {:?}", event),
-                                            //     start_at_row,
-                                            //     start_at_column
-                                            // );
-                                        },
-                                    }
+                                    handle_modified_keys(event.modifiers, event.code, start_at_row, start_at_column);
+                                    handle_key_codes(
+                                        self,
+                                        event.modifiers,
+                                        event.code,
+                                        &mut stream,
+                                        tx.clone(),
+                                        start_at_row,
+                                        start_at_column
+                                    );
                                 },
                                 _ => { break; },
                             }

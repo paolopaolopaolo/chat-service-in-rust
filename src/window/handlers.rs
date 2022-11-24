@@ -1,5 +1,10 @@
-use std::io::{
-    stdout,
+use std::{
+    sync::mpsc::Sender,
+    net::TcpStream,
+    io::{
+        stdout,
+        Write
+    }
 };
 use crossterm::{
     execute,
@@ -12,8 +17,14 @@ use crossterm::{
         disable_raw_mode
     },
 };
+use crate::window::window::{
+    ChatInput,
+    WindowActions,
+    println_starting_at,
+    adjust_text_for_overflow
+};
 
-fn handle_modified_keys(modifiers: KeyModifiers, code: KeyCode) {
+pub fn handle_modified_keys(modifiers: KeyModifiers, code: KeyCode, start_at_row: u16, start_at_column: u16) {
     match modifiers {
         KeyModifiers::CONTROL => {
             match code {
@@ -22,7 +33,12 @@ fn handle_modified_keys(modifiers: KeyModifiers, code: KeyCode) {
                         'c' => {
                             execute!(stdout(), Clear(ClearType::All)).unwrap();
                             disable_raw_mode().expect("error with disable raw mode");
-                            println!("CTRL+C to exit");
+                            println_starting_at(
+                                &mut stdout(),
+                                String::from("CTRL + C to exit"),
+                                start_at_row,
+                                start_at_column
+                            );
                         },
                         _ => {}
                     }
@@ -34,78 +50,87 @@ fn handle_modified_keys(modifiers: KeyModifiers, code: KeyCode) {
     }
 }
 
-// fn handle_key_codes(&mut self, code: KeyCode) {
-//     match code {
-//         KeyCode::Char(char) => {
-//             self.text = format!("{}{}", self.text, char);
-//             println_starting_at(
-//                 &mut stdout(),
-//                 self.text.clone(),
-//                 START_AT_ROW,
-//                 START_AT_COLUMN
-//             );
-//         },
-//         KeyCode::Left => {
-//             println_starting_at(&mut stdout(), 
-//                 "Left Key Pressed!".to_string(), 
-//                 START_AT_ROW + 10, 
-//                 START_AT_COLUMN
-//             );
-//         },
-//         KeyCode::Right => {
-//             println_starting_at(&mut stdout(), 
-//                 "Right Key Pressed!".to_string(), 
-//                 START_AT_ROW + 10, 
-//                 START_AT_COLUMN
-//             );
-//         },
-//         KeyCode::Up => {
-//             println_starting_at(&mut stdout(), 
-//                 "Up Key Pressed!".to_string(), 
-//                 START_AT_ROW + 10, 
-//                 START_AT_COLUMN
-//             );
-//         },
-//         KeyCode::Down => {
-//             println_starting_at(&mut stdout(), 
-//                 "Down Key Pressed!".to_string(), 
-//                 START_AT_ROW + 10, 
-//                 START_AT_COLUMN
-//             );
-//         },
-//         KeyCode::Enter => {
-//             let target_string = format!("\r\n{}: {}\r\n", self.name.clone(), self.text.clone());
-//             stream.write(target_string.as_bytes()).expect("write failed");
-//             self.text = "".to_string();
+pub fn handle_key_codes(cw: &mut ChatInput, modifiers: KeyModifiers, code: KeyCode, stream: &mut TcpStream,  tx: Sender<WindowActions>, start_at_row: u16, start_at_column: u16) {
+    match code {
+        KeyCode::Char(char) => {
+            cw.text = format!("{}{}", cw.text, char);
+            let text_to_print = adjust_text_for_overflow(cw.text.clone());
+            if modifiers != KeyModifiers::CONTROL {
+                println_starting_at(
+                    &mut stdout(),
+                    text_to_print,
+                    start_at_row,
+                    start_at_column
+                );
+            }
+        },
+        KeyCode::Up => {
+            tx.send(WindowActions::ScrollUp).unwrap_or_else(|err| {
+                println_starting_at(&mut stdout(), 
+                format!("Error! {err}"), 
+                start_at_row + 10, 
+                start_at_column
+            );
+            });
+        },
+        KeyCode::Down => {
+            tx.send(WindowActions::ScrollDown).unwrap_or_else(|err| {
+                println_starting_at(&mut stdout(), 
+                format!("Error! {err}"), 
+                start_at_row + 10, 
+                start_at_column
+            );
+            });
+        },
+        KeyCode::Left => {
+            tx.send(WindowActions::CursorLeft).unwrap_or_else(|err| {
+                println_starting_at(&mut stdout(), 
+                format!("Error! {err}"), 
+                start_at_row + 10, 
+                start_at_column
+            );
+            });
+        },
+        KeyCode::Right => {
+            tx.send(WindowActions::CursorRight).unwrap_or_else(|err| {
+                println_starting_at(&mut stdout(), 
+                format!("Error! {err}"), 
+                start_at_row + 10, 
+                start_at_column
+            );
+            });
+        },
+        KeyCode::Enter => {
+            let target_string = format!("\r\n{}: {}\r\n", cw.name.clone(), cw.text.clone());
+            stream.write(target_string.as_bytes()).expect("write failed");
+            cw.text = "".to_string();
 
-//             println_starting_at(
-//                 &mut stdout(),
-//                 self.text.clone(),
-//                 START_AT_ROW,
-//                 START_AT_COLUMN
-//             );
-//         },
-//         KeyCode::Backspace => {
-//             self.text = self.text[0..self.text.len() - 1].to_string();
-
-//             println_starting_at(
-//                 &mut stdout(),
-//                 self.text.clone(),
-//                 START_AT_ROW,
-//                 START_AT_COLUMN
-//             );
-//         }
-//         _ => {
-//             // println_starting_at(
-//             //     &mut stdout(),
-//             //     format!("event: {:?}", event),
-//             //     START_AT_ROW,
-//             //     START_AT_COLUMN
-//             // );
-//         },
-//     }
-// }
-
-pub fn handle_key_interactions(event: KeyEvent) {
-    handle_modified_keys(event.modifiers, event.code);
+            println_starting_at(
+                &mut stdout(),
+                cw.text.clone(),
+                start_at_row,
+                start_at_column
+            );
+        },
+        KeyCode::Backspace => {
+            if cw.text.len() > 0 {
+                cw.text = cw.text[0..cw.text.len() - 1].to_string();
+                let text_to_print = adjust_text_for_overflow(cw.text.clone());
+                println_starting_at(
+                    &mut stdout(),
+                    text_to_print,
+                    start_at_row,
+                    start_at_column
+                );
+            }
+        }
+        _ => {
+            // println_starting_at(
+            //     &mut stdout(),
+            //     format!("event: {:?}", event),
+            //     start_at_row,
+            //     start_at_column
+            // );
+        },
+    }
 }
