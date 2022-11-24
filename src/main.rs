@@ -5,7 +5,7 @@ use std::{
     io::{BufReader, BufRead, stdin, stdout},
     thread,
 };
-use chat_server::window::window::{SharedChatWindow, ChatWindow, ChatInput, lock_chat_window, WindowActions, println_starting_at};
+use chat_server::window::window::{SharedChatWindow, ChatWindow, ChatInput, lock_chat_window, WindowActions};
 
 fn main() {
     let cli_args: Vec<String> = args().collect();
@@ -26,12 +26,12 @@ fn main() {
     let mut cw_clone0: SharedChatWindow = cw.clone();
     let mut cw_clone1: SharedChatWindow = cw.clone();
     let cw_clone2: SharedChatWindow = cw.clone();
-    let locked_cw = lock_chat_window(&mut cw_clone0);
-    locked_cw.print();
-
+    {
+        let locked_cw = lock_chat_window(&mut cw_clone0);
+        locked_cw.print();
+    }
+    
     let h1 = thread::spawn(move || {
-        println_starting_at(&mut stdout(), String::from("test: thread started"), 25, 4);
-
         match connect {
             Ok(mut stream) => {
                 let bufreader = BufReader::new(&mut stream);
@@ -40,11 +40,8 @@ fn main() {
                         .map(|i| i.unwrap());
                     loop {
                         match buf_array.next() {
-                            Some(string) => {
-                                println_starting_at(&mut stdout(), String::from("test: pre-chat lock"), 25, 4);
- 
+                            Some(string) => { 
                                 let mut locked_cw = lock_chat_window(&mut cw_clone1);
-                                println_starting_at(&mut stdout(), format!("test: {}", string), 25, 4);
                                 locked_cw.add_chat_line(string);
                             },
                             _ => {},
@@ -54,16 +51,25 @@ fn main() {
             Err(v) => {println!("Error: {}", v)}
         }
     });
-
+    // TODO: Put this in a method/function.
     let (tx, rx) = mpsc::channel();
     let h2 = thread::spawn(move || {
-        let mut locked_chat_window = lock_chat_window(&cw_clone2);
-        for received in rx.recv() {
-            match received {
-                WindowActions::ScrollUp => {
-                    locked_chat_window.scroll_up();
+        loop {
+            match rx.recv() {
+                Ok(received) => {
+                    match received {
+                        WindowActions::ScrollUp => {
+                            let mut locked_chat_window = lock_chat_window(&cw_clone2);
+                            locked_chat_window.scroll_up();
+                        },
+                        WindowActions::ScrollDown => {
+                            let mut locked_chat_window = lock_chat_window(&cw_clone2);
+                            locked_chat_window.scroll_down();
+                        },
+                        _ => {}
+                    }
                 },
-                _ => {}
+                _ => {},
             }
         }
     });
@@ -72,9 +78,8 @@ fn main() {
     let h3 = thread::spawn(move || {
         chat_input.capture_events(client_socket.as_str(), tx.clone());
     });
-
-    h1.join();
-    h2.join();
-    h3.join();
+    h1.join().expect("sad h1");
+    h2.join().expect("sad h2");
+    h3.join().expect("sad h3");
 
 }

@@ -3,9 +3,7 @@ use std::{
     cmp,
     io::{Write, stdout, Stdout},
     net::TcpStream, vec,
-    sync::{mpsc::Sender, MutexGuard, Arc, Mutex},
-    thread,
-    time::Duration,
+    sync::{mpsc::Sender, MutexGuard, Arc, Mutex}
 };
 use crossterm::{
     execute,
@@ -40,7 +38,7 @@ use crossterm::{
  */
 
 const MAX_WINDOW_WIDTH: u16 = 85;
-const MAX_WINDOW_HEIGHT: u16 = 10;
+const MAX_WINDOW_HEIGHT: u16 = 25;
 const H_PADDING: u16 = 2; 
 const TL_CORNER: char = '┌';
 const TR_CORNER: char = '┐'; 
@@ -217,16 +215,37 @@ fn print_slice(text: &Vec<String>, start: usize, end: usize) {
     stdout.flush().unwrap();
 }
 
+fn adjust_text_for_overflow(copy: String) -> String {
+    let max_input_length = MAX_HLINE_LENGTH as usize - 4;
+    let mut text_to_print = copy.clone();
+    if text_to_print.len() > max_input_length {
+        let start_index = text_to_print.len() - max_input_length;
+        text_to_print = text_to_print[start_index..text_to_print.len()].to_string();
+    }
+    text_to_print
+}
+
 pub enum WindowActions {
-    ScrollUp
+    ScrollUp,
+    ScrollDown,
+    CursorLeft,
+    CursorRight,
 }
 
 // Blocking call to get a working chat_window
-pub fn lock_chat_window<'a>(chat_window: &'a SharedChatWindow) -> MutexGuard<ChatWindow> {
-    match chat_window.lock() {
-        Ok(lock) => lock,
-        _ => panic!("the world is on fire"),
+pub fn lock_chat_window(chat_window: &SharedChatWindow) -> MutexGuard<ChatWindow> {
+    let mut result = None;
+    let mut count = 0;
+    while result.is_none() {
+        match chat_window.try_lock() {
+            Ok(cw) => { result = Some(cw); },
+            _ => {
+                println_starting_at(&mut stdout(), format!("looping: {}", count), 25, 0);
+                count += 1;
+            },
+        }
     }
+    result.unwrap()
 }
 
 /**
@@ -256,7 +275,15 @@ impl ChatWindow {
     }
 
     pub fn scroll_up (&mut self) {
-        self.current_slice.change(&self.text, self.current_slice.from - 1, self.current_slice.to - 1);
+        if self.current_slice.from - 1 > usize::MIN {
+            self.current_slice.change(&self.text, self.current_slice.from - 1, self.current_slice.to - 1);
+        }
+    }
+
+    pub fn scroll_down (&mut self) {
+        if self.current_slice.to + 1 < self.text.len() {
+            self.current_slice.change(&self.text, self.current_slice.from + 1, self.current_slice.to + 1);
+        }
     }
 
     // TODO: Remove this in favor of pulling text from the ChatBuffer
@@ -278,7 +305,7 @@ impl ChatWindow {
         enable_raw_mode().expect("raw mode swap failed");
         let mut stdout = stdout();
         reset_screen(&mut stdout);
-        println(&mut stdout, self.name.clone());
+        println(&mut stdout, format!(">> You are {}!", self.name.clone()));
         top_line(&mut stdout);
   
         let get_text_by_line = |string_line: &String| {
@@ -364,41 +391,49 @@ impl ChatInput {
                                     match event.code {
                                         KeyCode::Char(char) => {
                                             self.text = format!("{}{}", self.text, char);
+                                            let mut text_to_print = adjust_text_for_overflow(self.text.clone());
                                             println_starting_at(
                                                 &mut stdout(),
-                                                self.text.clone(),
+                                                text_to_print,
                                                 start_at_row,
                                                 start_at_column
                                             );
                                         },
-                                        KeyCode::Left => {
-                                            println_starting_at(&mut stdout(), 
-                                                "Left Key Pressed!".to_string(), 
-                                                start_at_row + 10, 
-                                                start_at_column
-                                            );
-                                        },
-                                        KeyCode::Right => {
-                                            println_starting_at(&mut stdout(), 
-                                                "Right Key Pressed!".to_string(), 
-                                                start_at_row + 10, 
-                                                start_at_column
-                                            );
-                                        },
                                         KeyCode::Up => {
-                                            tx.send(WindowActions::ScrollUp).unwrap();
-                                            println_starting_at(&mut stdout(), 
-                                                "Up Key Pressed!".to_string(), 
+                                            tx.send(WindowActions::ScrollUp).unwrap_or_else(|err| {
+                                                println_starting_at(&mut stdout(), 
+                                                format!("Error! {err}"), 
                                                 start_at_row + 10, 
                                                 start_at_column
                                             );
+                                            });
                                         },
                                         KeyCode::Down => {
-                                            println_starting_at(&mut stdout(), 
-                                                "Down Key Pressed!".to_string(), 
+                                            tx.send(WindowActions::ScrollDown).unwrap_or_else(|err| {
+                                                println_starting_at(&mut stdout(), 
+                                                format!("Error! {err}"), 
                                                 start_at_row + 10, 
                                                 start_at_column
                                             );
+                                            });
+                                        },
+                                        KeyCode::Left => {
+                                            tx.send(WindowActions::CursorLeft).unwrap_or_else(|err| {
+                                                println_starting_at(&mut stdout(), 
+                                                format!("Error! {err}"), 
+                                                start_at_row + 10, 
+                                                start_at_column
+                                            );
+                                            });
+                                        },
+                                        KeyCode::Right => {
+                                            tx.send(WindowActions::CursorRight).unwrap_or_else(|err| {
+                                                println_starting_at(&mut stdout(), 
+                                                format!("Error! {err}"), 
+                                                start_at_row + 10, 
+                                                start_at_column
+                                            );
+                                            });
                                         },
                                         KeyCode::Enter => {
                                             let target_string = format!("\r\n{}: {}\r\n", self.name.clone(), self.text.clone());
@@ -413,14 +448,16 @@ impl ChatInput {
                                             );
                                         },
                                         KeyCode::Backspace => {
-                                            self.text = self.text[0..self.text.len() - 1].to_string();
-        
-                                            println_starting_at(
-                                                &mut stdout(),
-                                                self.text.clone(),
-                                                start_at_row,
-                                                start_at_column
-                                            );
+                                            if self.text.len() > 0 {
+                                                self.text = self.text[0..self.text.len() - 1].to_string();
+                                                let mut text_to_print = adjust_text_for_overflow(self.text.clone());
+                                                println_starting_at(
+                                                    &mut stdout(),
+                                                    text_to_print,
+                                                    start_at_row,
+                                                    start_at_column
+                                                );
+                                            }
                                         }
                                         _ => {
                                             // println_starting_at(
