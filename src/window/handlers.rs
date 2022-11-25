@@ -19,12 +19,13 @@ use crossterm::{
 };
 use crate::window::window::{
     ChatInput,
+    Dimensions,
     WindowActions,
     println_starting_at,
     adjust_text_for_overflow
 };
 
-pub fn handle_modified_keys(modifiers: KeyModifiers, code: KeyCode, start_at_row: u16, start_at_column: u16) {
+pub fn handle_modified_keys(modifiers: KeyModifiers, code: KeyCode, start_at_row: u16, start_at_column: u16, dimensions: Dimensions) {
     match modifiers {
         KeyModifiers::CONTROL => {
             match code {
@@ -37,7 +38,8 @@ pub fn handle_modified_keys(modifiers: KeyModifiers, code: KeyCode, start_at_row
                                 &mut stdout(),
                                 String::from("CTRL + C to exit"),
                                 start_at_row,
-                                start_at_column
+                                start_at_column,
+                                dimensions
                             );
                         },
                         _ => {}
@@ -50,17 +52,18 @@ pub fn handle_modified_keys(modifiers: KeyModifiers, code: KeyCode, start_at_row
     }
 }
 
-pub fn handle_key_codes(cw: &mut ChatInput, modifiers: KeyModifiers, code: KeyCode, stream: &mut TcpStream,  tx: Sender<WindowActions>, start_at_row: u16, start_at_column: u16) {
+pub fn handle_key_codes(cw: &mut ChatInput, modifiers: KeyModifiers, code: KeyCode, stream: &mut TcpStream,  tx: Sender<WindowActions>, start_at_row: u16, start_at_column: u16, dimensions: Dimensions) {
     match code {
         KeyCode::Char(char) => {
             cw.text = format!("{}{}", cw.text, char);
-            let text_to_print = adjust_text_for_overflow(cw.text.clone());
+            let text_to_print = adjust_text_for_overflow(cw.text.clone(), dimensions.clone());
             if modifiers != KeyModifiers::CONTROL {
                 println_starting_at(
                     &mut stdout(),
                     text_to_print,
                     start_at_row,
-                    start_at_column
+                    start_at_column,
+                    dimensions
                 );
             }
         },
@@ -69,7 +72,8 @@ pub fn handle_key_codes(cw: &mut ChatInput, modifiers: KeyModifiers, code: KeyCo
                 println_starting_at(&mut stdout(), 
                 format!("Error! {err}"), 
                 start_at_row + 10, 
-                start_at_column
+                start_at_column,
+                dimensions
             );
             });
         },
@@ -78,7 +82,8 @@ pub fn handle_key_codes(cw: &mut ChatInput, modifiers: KeyModifiers, code: KeyCo
                 println_starting_at(&mut stdout(), 
                 format!("Error! {err}"), 
                 start_at_row + 10, 
-                start_at_column
+                start_at_column,
+                dimensions
             );
             });
         },
@@ -87,7 +92,8 @@ pub fn handle_key_codes(cw: &mut ChatInput, modifiers: KeyModifiers, code: KeyCo
                 println_starting_at(&mut stdout(), 
                 format!("Error! {err}"), 
                 start_at_row + 10, 
-                start_at_column
+                start_at_column,
+                dimensions
             );
             });
         },
@@ -96,7 +102,8 @@ pub fn handle_key_codes(cw: &mut ChatInput, modifiers: KeyModifiers, code: KeyCo
                 println_starting_at(&mut stdout(), 
                 format!("Error! {err}"), 
                 start_at_row + 10, 
-                start_at_column
+                start_at_column,
+                dimensions
             );
             });
         },
@@ -109,18 +116,20 @@ pub fn handle_key_codes(cw: &mut ChatInput, modifiers: KeyModifiers, code: KeyCo
                 &mut stdout(),
                 cw.text.clone(),
                 start_at_row,
-                start_at_column
+                start_at_column,
+                dimensions
             );
         },
         KeyCode::Backspace => {
             if cw.text.len() > 0 {
                 cw.text = cw.text[0..cw.text.len() - 1].to_string();
-                let text_to_print = adjust_text_for_overflow(cw.text.clone());
+                let text_to_print = adjust_text_for_overflow(cw.text.clone(), dimensions.clone());
                 println_starting_at(
                     &mut stdout(),
                     text_to_print,
                     start_at_row,
-                    start_at_column
+                    start_at_column,
+                    dimensions
                 );
             }
         }

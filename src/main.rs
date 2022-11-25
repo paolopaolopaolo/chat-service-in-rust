@@ -2,7 +2,7 @@ use std::{
     env::args,
     sync::{Arc, Mutex, mpsc},
     net::{TcpStream},
-    io::{BufReader, BufRead, stdin},
+    io::{BufReader, BufRead},
     thread,
 };
 use chat_server::window::window::{
@@ -13,18 +13,32 @@ use chat_server::window::window::{
     WindowActions,
     BasicInputPanel
 };
-use crossterm::event::{Event};
 
 fn main() {
     let cli_args: Vec<String> = args().collect();
-    let socket: String = match cli_args.get(2) {
-        Some(string) => string.clone(),
-        _ => String::from("0.0.0.0:8000")
-    };
     let client_socket = match cli_args.get(1) {
         Some(string) => string.clone(),
         _ => String::from("0.0.0.0:9000")
     };
+    let socket: String = match cli_args.get(2) {
+        Some(string) => string.clone(),
+        _ => String::from("0.0.0.0:8000")
+    };
+    let width: Option<usize> = match cli_args.get(3) {
+        Some(string) => match string.parse::<usize>() {
+            Ok(value) => Some(value),
+            _ => None
+        },
+        _ => None
+    };
+    let height: Option<usize> = match cli_args.get(4) {
+        Some(string) => match string.parse::<usize>() {
+            Ok(value) => Some(value),
+            _ => None
+        },
+        _ => None
+    };
+
     let mut name = String::new();
     // Fancy UI for adding your name
     {
@@ -37,7 +51,7 @@ fn main() {
     }
 
     // Instantiate and clone ChatWindow with Shared State
-    let cw: SharedChatWindow = Arc::new(Mutex::new(ChatWindow::new(name.clone())));
+    let cw: SharedChatWindow = Arc::new(Mutex::new(ChatWindow::new(name.clone(), width, height)));
     let mut cw_clone0: SharedChatWindow = cw.clone();
     let mut cw_clone1: SharedChatWindow = cw.clone();
     let cw_clone2: SharedChatWindow = cw.clone();
@@ -89,7 +103,9 @@ fn main() {
                             locked_chat_window.scroll_down();
                         },
                         WindowActions::Resize(x, y) => {
-                            let locked_chat_window = lock_chat_window(&cw_clone2);
+                            let mut locked_chat_window = lock_chat_window(&cw_clone2);
+                            locked_chat_window.dimensions.width = x;
+                            locked_chat_window.dimensions.height = y;
                             locked_chat_window.print();
                         }
                         _ => {}
@@ -101,7 +117,7 @@ fn main() {
     });
 
     let h3 = thread::spawn(move || {
-        let mut chat_input = ChatInput::new(name);
+        let mut chat_input = ChatInput::new(name, width, height);
         chat_input.capture_events(client_socket.as_str(), tx.clone());
     });
     h1.join().expect("sad h1");
