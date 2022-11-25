@@ -9,7 +9,7 @@ use std::{
 use crossterm::{
     execute,
     event::{
-        KeyEvent, KeyModifiers, KeyCode
+        KeyModifiers, KeyCode
     },
     terminal::{
         Clear,

@@ -5,7 +5,15 @@ use std::{
     io::{BufReader, BufRead, stdin},
     thread,
 };
-use chat_server::window::window::{SharedChatWindow, ChatWindow, ChatInput, lock_chat_window, WindowActions};
+use chat_server::window::window::{
+    SharedChatWindow,
+    ChatWindow,
+    ChatInput,
+    lock_chat_window,
+    WindowActions,
+    BasicInputPanel
+};
+use crossterm::event::{Event};
 
 fn main() {
     let cli_args: Vec<String> = args().collect();
@@ -17,21 +25,33 @@ fn main() {
         Some(string) => string.clone(),
         _ => String::from("0.0.0.0:9000")
     };
-    println!("What's your name?");
     let mut name = String::new();
-    stdin().read_line(&mut name).expect("Name read failed");
-    name = name.trim().to_string();
-    let connect = TcpStream::connect(socket.as_str());
+    // Fancy UI for adding your name
+    {
+        let mut basic_panel = BasicInputPanel::new();
+        basic_panel.enable_raw();
+        basic_panel.print();
+
+        let value = basic_panel.capture_input();
+        name = value.clone();
+    }
+
+    // Instantiate and clone ChatWindow with Shared State
     let cw: SharedChatWindow = Arc::new(Mutex::new(ChatWindow::new(name.clone())));
     let mut cw_clone0: SharedChatWindow = cw.clone();
     let mut cw_clone1: SharedChatWindow = cw.clone();
     let cw_clone2: SharedChatWindow = cw.clone();
+
+    // Prints the initial window. Blocking.
+    // TODO: re-print the window on screen re-size
     {
         let locked_cw = lock_chat_window(&mut cw_clone0);
         locked_cw.print();
     }
-    
+
+    // Thread 1: Connects the ChatWindow to traffic from ChatLog feed and adds lines to the ChatWindow
     let h1 = thread::spawn(move || {
+        let connect = TcpStream::connect(socket.as_str());
         match connect {
             Ok(mut stream) => {
                 let bufreader = BufReader::new(&mut stream);
@@ -51,6 +71,8 @@ fn main() {
             Err(v) => {println!("Error: {}", v)}
         }
     });
+
+    // Thread 2: Handles events transmitted from ChatInput and tells ChatWindow what to do in response.
     // TODO: Put this in a method/function.
     let (tx, rx) = mpsc::channel();
     let h2 = thread::spawn(move || {
@@ -74,8 +96,8 @@ fn main() {
         }
     });
 
-    let mut chat_input = ChatInput::new(name);
     let h3 = thread::spawn(move || {
+        let mut chat_input = ChatInput::new(name);
         chat_input.capture_events(client_socket.as_str(), tx.clone());
     });
     h1.join().expect("sad h1");
