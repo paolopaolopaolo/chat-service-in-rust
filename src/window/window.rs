@@ -13,7 +13,6 @@ use crossterm::{
         Print,
     },
     cursor::{
-        Show,
         Hide,
         MoveTo,
         MoveToNextLine,
@@ -49,6 +48,8 @@ const BL_CORNER: char = '└';
 const BR_CORNER: char = '┘';
 const VERT_EDGE: char = '│';
 const HORI_EDGE: char = '─';
+const DOBLE_HORI_EDGE: char = '═';
+const DOBLE_VERT_EDGE: char = '║';
 const LVDIV_EDGE: char = '├';
 const RVDIV_EDGE: char = '┤';
 const MAX_HLINE_LENGTH: u16 = MAX_WINDOW_WIDTH - 2u16 * H_PADDING;
@@ -284,52 +285,52 @@ impl BasicInputPanel {
         ).unwrap();
         println(&mut stdout, vec_char_to_string([
             vec![TL_CORNER],
-            vec![HORI_EDGE; width],
+            vec![DOBLE_HORI_EDGE; width],
             vec![TR_CORNER],
         ].concat()));
         println(&mut stdout, vec_char_to_string([
-            vec![VERT_EDGE],
+            vec![DOBLE_VERT_EDGE],
             vec![' '; width],
-            vec![VERT_EDGE],
+            vec![DOBLE_VERT_EDGE],
         ].concat()));
         println(&mut stdout, vec_char_to_string([
-            vec![VERT_EDGE],
+            vec![DOBLE_VERT_EDGE],
             vec![' '; width],
-            vec![VERT_EDGE],
+            vec![DOBLE_VERT_EDGE],
         ].concat()));
         println(&mut stdout, vec_char_to_string([
-            vec![VERT_EDGE],
+            vec![DOBLE_VERT_EDGE],
             vec![' '; start_q_at],
             String::from(q).chars().collect::<Vec<char>>(),
             vec![' '; start_q_at + 1],
-            vec![VERT_EDGE],
+            vec![DOBLE_VERT_EDGE],
         ].concat()));
         println(&mut stdout, vec_char_to_string([
-            vec![VERT_EDGE],
+            vec![DOBLE_VERT_EDGE],
             vec![' '; width],
-            vec![VERT_EDGE],
+            vec![DOBLE_VERT_EDGE],
         ].concat()));
         println(&mut stdout, vec_char_to_string([
-            vec![VERT_EDGE],
+            vec![DOBLE_VERT_EDGE],
             vec![' '; start_a_at],
             a.chars().collect::<Vec<char>>(),
             right_trim,
             vec![' '; start_a_at + 1],
-            vec![VERT_EDGE],
+            vec![DOBLE_VERT_EDGE],
         ].concat()));
         println(&mut stdout, vec_char_to_string([
-            vec![VERT_EDGE],
+            vec![DOBLE_VERT_EDGE],
             vec![' '; width],
-            vec![VERT_EDGE],
+            vec![DOBLE_VERT_EDGE],
         ].concat()));
         println(&mut stdout, vec_char_to_string([
-            vec![VERT_EDGE],
+            vec![DOBLE_VERT_EDGE],
             vec![' '; width],
-            vec![VERT_EDGE],
+            vec![DOBLE_VERT_EDGE],
         ].concat()));
         println(&mut stdout, vec_char_to_string([
             vec![BL_CORNER],
-            vec![HORI_EDGE; width],
+            vec![DOBLE_HORI_EDGE; width],
             vec![BR_CORNER],
         ].concat()));
         stdout.flush().expect("fail");
