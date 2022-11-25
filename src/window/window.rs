@@ -413,6 +413,7 @@ pub enum WindowActions {
     ScrollDown,
     CursorLeft,
     CursorRight,
+    Resize(usize, usize),
 }
 
 
@@ -551,7 +552,10 @@ impl ChatInput {
                                         start_at_column
                                     );
                                 },
-                                _ => { break; },
+                                Event::Resize(x, y) => {
+                                    tx.clone().send(WindowActions::Resize(x as usize, y as usize)).expect("didn't send resize event");
+                                },
+                                _ => { },
                             }
                         },
                         _ => {},
@@ -567,8 +571,6 @@ impl ChatInput {
                 );
             },
         }
-        
-        
         disable_raw_mode().expect("disable raw mode failed");
     }
 }

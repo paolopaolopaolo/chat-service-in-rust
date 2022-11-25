@@ -88,6 +88,10 @@ fn main() {
                             let mut locked_chat_window = lock_chat_window(&cw_clone2);
                             locked_chat_window.scroll_down();
                         },
+                        WindowActions::Resize(x, y) => {
+                            let locked_chat_window = lock_chat_window(&cw_clone2);
+                            locked_chat_window.print();
+                        }
                         _ => {}
                     }
                 },
