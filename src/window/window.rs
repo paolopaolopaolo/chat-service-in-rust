@@ -204,7 +204,7 @@ impl ChatWindow {
             ].concat());
             println(&mut stdout, text);
         });
-        let mut lines_left = self.dimensions.clone().height as u16 - 4;
+        let mut lines_left = self.dimensions.clone().height as u16 - 2;
         while lines_left > u16::MIN {
             empty_line(&mut stdout, self.dimensions.clone());
             lines_left -= 1;
@@ -582,9 +582,9 @@ impl ChatInput {
                                     );
                                 },
                                 Event::Resize(x, y) => {
-                                    tx.clone().send(WindowActions::Resize(x as usize, y as usize)).expect("didn't send resize event");
-                                    self.dimensions.width = x as usize - 2;
-                                    self.dimensions.height = y as usize - 2;
+                                    tx.clone().send(WindowActions::Resize(x as usize, y as usize - 15)).expect("didn't send resize event");
+                                    self.dimensions.width = x as usize;
+                                    self.dimensions.height = y as usize;
                                     start_at_row = x;
                                 },
                                 _ => { },
