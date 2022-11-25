@@ -5,6 +5,7 @@ use std::{
     io::{BufReader, BufRead},
     thread,
 };
+use crossterm::terminal::{enable_raw_mode, disable_raw_mode};
 use chat_server::window::window::{
     SharedChatWindow,
     ChatWindow,
@@ -42,8 +43,8 @@ fn main() {
     let mut name = String::new();
     // Fancy UI for adding your name
     {
+        enable_raw_mode().expect("fail");
         let mut basic_panel = BasicInputPanel::new();
-        basic_panel.enable_raw();
         basic_panel.print();
 
         let value = basic_panel.capture_input();

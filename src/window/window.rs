@@ -180,9 +180,8 @@ impl ChatWindow {
     }
 
     pub fn print (&self) {
-        enable_raw_mode().expect("raw mode swap failed");
         let mut stdout = stdout();
-        reset_screen(&mut stdout, self.dimensions.clone());
+        reset_screen(&mut stdout);
         println(&mut stdout, format!(">> You are {}!", self.name.clone()));
         top_line(&mut stdout, self.dimensions.clone());
           self.text
@@ -220,7 +219,6 @@ impl ChatWindow {
         empty_line(&mut stdout, self.dimensions.clone());
         bottom_line(&mut stdout, self.dimensions.clone());
         stdout.flush().unwrap_or_else(|_| { println!("stout flush failed"); });
-        disable_raw_mode().expect("raw mode swap failed!");
     }
 
 }
@@ -361,13 +359,12 @@ pub fn vec_char_to_string(vec_char: Vec<char>) -> String {
 }
 
 // Clear the screen and reset everything
-pub fn reset_screen(stdout: &mut Stdout, dimensions: Dimensions) {
+pub fn reset_screen(stdout: &mut Stdout) {
     execute!(
         stdout,
         Clear(ClearType::All),
         Clear(ClearType::Purge),
         MoveTo(0, 0),
-        SetSize(dimensions.width as u16, dimensions.height as u16),
     ).unwrap();
 }
 
@@ -557,7 +554,6 @@ impl ChatInput {
 
     // BLOCKING
     pub fn capture_events(&mut self, socket: &str, tx: Sender<WindowActions>) {
-        let mut start_at_row = self.dimensions.height as u16 + 1;
         let mut start_at_column = 0;
         enable_raw_mode().expect("enable raw mode failed");
         let stream = TcpStream::connect(socket);
@@ -569,23 +565,22 @@ impl ChatInput {
                         Ok(ev) => {
                             match ev {
                                 Event::Key(event) => {
-                                    handle_modified_keys(event.modifiers, event.code, start_at_row, start_at_column, self.dimensions.clone());
+                                    handle_modified_keys(event.modifiers, event.code, self.dimensions.height as u16 + 1, start_at_column, self.dimensions.clone());
                                     handle_key_codes(
                                         self,
                                         event.modifiers,
                                         event.code,
                                         &mut stream,
                                         tx.clone(),
-                                        start_at_row,
-                                        start_at_column,
+                                        self.dimensions.height as u16 + 1,
+                                        0,
                                         self.dimensions.clone()
                                     );
                                 },
                                 Event::Resize(x, y) => {
-                                    tx.clone().send(WindowActions::Resize(x as usize, y as usize - 15)).expect("didn't send resize event");
+                                    tx.clone().send(WindowActions::Resize(x as usize, y as usize - 12)).expect("didn't send resize event");
                                     self.dimensions.width = x as usize;
-                                    self.dimensions.height = y as usize;
-                                    start_at_row = x;
+                                    self.dimensions.height = y as usize - 4;
                                 },
                                 _ => { },
                             }
@@ -598,7 +593,7 @@ impl ChatInput {
                 println_starting_at(
                     &mut stdout(),
                     format!("socket_failed: {:?}", err),
-                    start_at_row + 10,
+                    self.dimensions.height as u16 + 12,
                     start_at_column,
                     self.dimensions.clone()
                 );
