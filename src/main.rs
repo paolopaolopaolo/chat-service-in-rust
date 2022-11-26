@@ -2,15 +2,18 @@ use std::{
     env::args,
     sync::{Arc, Mutex, mpsc},
     net::{TcpStream},
-    io::{BufReader, BufRead},
+    io::{BufReader, BufRead, stdout},
     thread,
+    time::Duration,
 };
 use crossterm::terminal::{enable_raw_mode, disable_raw_mode};
 use chat_server::window::window::{
     SharedChatWindow,
     ChatWindow,
     ChatInput,
+    Dimensions,
     lock_chat_window,
+    reset_screen,
     WindowActions,
     BasicInputPanel
 };

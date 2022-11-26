@@ -71,7 +71,7 @@ pub type SharedChatWindow = Arc<Mutex<ChatWindow>>;
  * An Index Slice that runs an on-change function when it changes
  **/
 #[derive(Copy, Clone)]
-struct SliceIndex {
+pub struct SliceIndex {
     from: usize,
     to: usize,
     on_change: fn(&Vec<String>, usize, usize, Dimensions),
@@ -109,7 +109,7 @@ pub struct ChatWindow {
     name: String,
     pub text: Vec<String>,
     pub dimensions: Dimensions,
-    current_slice: SliceIndex,
+    pub current_slice: SliceIndex,
 }
 
 /**
@@ -171,7 +171,7 @@ impl ChatWindow {
         lines.iter().for_each(|line| {
             self.text.push(line.clone());
         });
-        let max_height = self.dimensions.height - 2;
+        let max_height = self.dimensions.height - 4;
         if self.text.len() < self.dimensions.height {
             self.current_slice.change(&self.text, 0, max_height, self.dimensions.clone());
         } else {
@@ -179,10 +179,12 @@ impl ChatWindow {
         }
     }
 
+    // TODO: add an optional argument here for if this is refreshing an existing print
     pub fn print (&self) {
         let mut stdout = stdout();
         reset_screen(&mut stdout);
         println(&mut stdout, format!(">> You are {}!", self.name.clone()));
+        //  if refreshing, update self.current_slice directly. 
         top_line(&mut stdout, self.dimensions.clone());
           self.text
             .iter()
@@ -203,7 +205,7 @@ impl ChatWindow {
             ].concat());
             println(&mut stdout, text);
         });
-        let mut lines_left = self.dimensions.clone().height as u16 - 2;
+        let mut lines_left = self.dimensions.clone().height as u16 - 4;
         while lines_left > u16::MIN {
             empty_line(&mut stdout, self.dimensions.clone());
             lines_left -= 1;
@@ -514,8 +516,6 @@ pub fn lock_chat_window(chat_window: &SharedChatWindow) -> MutexGuard<ChatWindow
     result.unwrap()
 }
 
-
-
 /**
  * Enums
  */
@@ -528,6 +528,10 @@ pub enum WindowActions {
     Resize(usize, usize),
 }
 
+
+/**
+ * ChatInput component
+ */
 pub struct ChatInput {
     pub text: String,
     pub name: String,
@@ -555,7 +559,6 @@ impl ChatInput {
     // BLOCKING
     pub fn capture_events(&mut self, socket: &str, tx: Sender<WindowActions>) {
         let mut start_at_column = 0;
-        enable_raw_mode().expect("enable raw mode failed");
         let stream = TcpStream::connect(socket);
 
         match stream {
@@ -572,15 +575,15 @@ impl ChatInput {
                                         event.code,
                                         &mut stream,
                                         tx.clone(),
-                                        self.dimensions.height as u16 + 1,
+                                        self.dimensions.height as u16 - 1,
                                         0,
                                         self.dimensions.clone()
                                     );
                                 },
                                 Event::Resize(x, y) => {
-                                    tx.clone().send(WindowActions::Resize(x as usize, y as usize - 12)).expect("didn't send resize event");
+                                    tx.clone().send(WindowActions::Resize(x as usize, y as usize - 1)).expect("didn't send resize event");
                                     self.dimensions.width = x as usize;
-                                    self.dimensions.height = y as usize - 4;
+                                    self.dimensions.height = y as usize - 1;
                                 },
                                 _ => { },
                             }
