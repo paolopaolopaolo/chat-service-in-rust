@@ -8,15 +8,15 @@ use std::{
 use crossterm::{
     terminal::{enable_raw_mode}
 };
-use chat_server::window::window::{
-    SharedChatWindow,
-    ChatWindow,
-    ChatInput,
-    Dimensions,
-    lock_chat_window,
-    reset_screen,
-    WindowActions,
-    BasicInputPanel
+use chat_server::window::{
+    helpers::*,
+    NameInput::BasicInputPanel,
+    ChatWindow::{
+        ChatWindow,
+    },
+    ChatInput::{
+        ChatInput,
+    }
 };
 
 fn main() {

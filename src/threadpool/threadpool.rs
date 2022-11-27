@@ -43,9 +43,6 @@ impl Threadpool {
                         break; 
                     }
                 }
-            }  
-            if keep_loop_alive {
-                println!("no thread available, looping until we find one");
             }
         }
         threads[idx_plop] = Some(thread::spawn(closure)); 

@@ -17,12 +17,11 @@ use crossterm::{
         disable_raw_mode
     },
 };
-use crate::window::window::{
-    ChatInput,
-    Dimensions,
-    WindowActions,
-    println_starting_at,
-    adjust_text_for_overflow
+use crate::window::{
+    ChatInput::{
+        ChatInput,
+    },
+    helpers::*,
 };
 
 pub fn handle_modified_keys(modifiers: KeyModifiers, code: KeyCode, start_at_row: u16, start_at_column: u16, dimensions: Dimensions) {
