@@ -23,7 +23,7 @@ use crossterm::{
         KeyCode,
     },
     terminal::{
-        SetSize, ClearType, Clear, enable_raw_mode, disable_raw_mode,
+        ClearType, Clear, enable_raw_mode, disable_raw_mode,
     }
 };
 

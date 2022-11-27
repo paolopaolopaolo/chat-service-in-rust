@@ -3,8 +3,7 @@ use std::{
     sync::{Arc, Mutex, mpsc},
     net::{TcpStream},
     io::{BufReader, BufRead, stdout},
-    thread,
-    time::Duration,
+    thread
 };
 use crossterm::{
     terminal::{enable_raw_mode}
@@ -113,14 +112,12 @@ fn main() {
                             locked_chat_window.dimensions.width = x;
                             locked_chat_window.dimensions.height = y - 2;
                             reset_screen(&mut stdout());
-                            thread::sleep(Duration::from_secs(2));
                             locked_chat_window.print();
-                            thread::sleep(Duration::from_secs(2));
                             let text = locked_chat_window.text.clone();
                             locked_chat_window.current_slice.change(
                                 &text,
                                 match text.len() > (y - 2) {
-                                    true => text.len() - (text.len() % (y - 2)),
+                                    true => text.len() - (text.len() % (y - 2)) - 2,
                                     false => 0
                                 },
                                 text.len(),
