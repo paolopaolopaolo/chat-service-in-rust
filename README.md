@@ -63,7 +63,7 @@ ChatInput
 
 ## Things left to-do
 * [x] Implement a blocking fancy UI/UX flow for entering the name.
-* [ ] Implement screen-resize actions and have a dynamic screen-size.
-    * [ ] Bug where changing terminal size disconnects the client.
+* [x] Implement screen-resize actions and have a dynamic screen-size.
+    * [x] Bug where changing terminal size disconnects the client.
 * [ ] Bug where pressing CTRL + C once doesn't kill the outstanding TCP connection.
 * [ ] Implement something on the clients for when the server closes the connections.
