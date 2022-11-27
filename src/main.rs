@@ -6,7 +6,9 @@ use std::{
     thread,
     time::Duration,
 };
-use crossterm::terminal::{enable_raw_mode, disable_raw_mode};
+use crossterm::{
+    terminal::{enable_raw_mode}
+};
 use chat_server::window::window::{
     SharedChatWindow,
     ChatWindow,
@@ -109,8 +111,21 @@ fn main() {
                         WindowActions::Resize(x, y) => {
                             let mut locked_chat_window = lock_chat_window(&cw_clone2);
                             locked_chat_window.dimensions.width = x;
-                            locked_chat_window.dimensions.height = y;
+                            locked_chat_window.dimensions.height = y - 2;
+                            reset_screen(&mut stdout());
+                            thread::sleep(Duration::from_secs(2));
                             locked_chat_window.print();
+                            thread::sleep(Duration::from_secs(2));
+                            let text = locked_chat_window.text.clone();
+                            locked_chat_window.current_slice.change(
+                                &text,
+                                match text.len() > (y - 2) {
+                                    true => text.len() - (text.len() % (y - 2)),
+                                    false => 0
+                                },
+                                text.len(),
+                                Dimensions { width: x, height: y},
+                            );
                         }
                         _ => {}
                     }

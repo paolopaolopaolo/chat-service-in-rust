@@ -171,7 +171,7 @@ impl ChatWindow {
         lines.iter().for_each(|line| {
             self.text.push(line.clone());
         });
-        let max_height = self.dimensions.height - 4;
+        let max_height = self.dimensions.height - 2;
         if self.text.len() < self.dimensions.height {
             self.current_slice.change(&self.text, 0, max_height, self.dimensions.clone());
         } else {
@@ -179,36 +179,13 @@ impl ChatWindow {
         }
     }
 
-    // TODO: add an optional argument here for if this is refreshing an existing print
     pub fn print (&self) {
         let mut stdout = stdout();
         reset_screen(&mut stdout);
         println(&mut stdout, format!(">> You are {}!", self.name.clone()));
-        //  if refreshing, update self.current_slice directly. 
         top_line(&mut stdout, self.dimensions.clone());
-          self.text
-            .iter()
-            .enumerate()
-            .filter(|(idx, _)| {
-                *idx >= self.current_slice.from && *idx < self.current_slice.to
-            })
-            .for_each(|(_, string_line)| {
-            let max_hline_length = self.dimensions.clone().width as u16 - 4;
-            let left_padding: u16 = 2;
-            let right_padding: u16 = max_hline_length - left_padding - (string_line.len() as u16);
-            let text: String = vec_char_to_string([
-                vec![VERT_EDGE],
-                vec![' '; left_padding as usize],
-                string_line.chars().collect::<Vec<char>>(),
-                vec![' '; right_padding as usize],
-                vec![VERT_EDGE],
-            ].concat());
-            println(&mut stdout, text);
-        });
-        let mut lines_left = self.dimensions.clone().height as u16 - 4;
-        while lines_left > u16::MIN {
+        for _ in  0..self.dimensions.clone().height - 2 {
             empty_line(&mut stdout, self.dimensions.clone());
-            lines_left -= 1;
         }
         println(
             &mut stdout,
@@ -568,22 +545,22 @@ impl ChatInput {
                         Ok(ev) => {
                             match ev {
                                 Event::Key(event) => {
-                                    handle_modified_keys(event.modifiers, event.code, self.dimensions.height as u16 + 1, start_at_column, self.dimensions.clone());
+                                    handle_modified_keys(event.modifiers, event.code, self.dimensions.height as u16, start_at_column, self.dimensions.clone());
                                     handle_key_codes(
                                         self,
                                         event.modifiers,
                                         event.code,
                                         &mut stream,
                                         tx.clone(),
-                                        self.dimensions.height as u16 - 1,
+                                        self.dimensions.height as u16 + 1,
                                         0,
                                         self.dimensions.clone()
                                     );
                                 },
                                 Event::Resize(x, y) => {
-                                    tx.clone().send(WindowActions::Resize(x as usize, y as usize - 1)).expect("didn't send resize event");
+                                    tx.clone().send(WindowActions::Resize(x as usize, y as usize - 2)).expect("didn't send resize event");
                                     self.dimensions.width = x as usize;
-                                    self.dimensions.height = y as usize - 1;
+                                    self.dimensions.height = y as usize - 4;
                                 },
                                 _ => { },
                             }
