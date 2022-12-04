@@ -62,7 +62,6 @@ fn main() {
     let cw_clone2: SharedChatWindow = cw.clone();
 
     // Prints the initial window. Blocking.
-    // TODO: re-print the window on screen re-size
     {
         let locked_cw = lock_chat_window(&mut cw_clone0);
         locked_cw.print();
