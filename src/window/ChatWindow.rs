@@ -136,8 +136,6 @@ fn print_slice(text: &Vec<String>, start: usize, end: usize, dimensions: Dimensi
     let text_slice = &text[start..actual_end];
     let mut stdout = stdout();
     let mut print_index = 2u16;
-    text_slice.iter().for_each(|string| {
-        printlns(&mut stdout, vec![string.clone()], &mut print_index, dimensions.clone());
-    });
+    printlns(&mut stdout, text_slice.to_vec(), &mut print_index, dimensions.clone());
     stdout.flush().unwrap();
 }

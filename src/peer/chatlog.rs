@@ -5,18 +5,23 @@ use std::{
         Arc,
         Mutex,
         mpsc::{self, Receiver, Sender},
-    }
+    },
+    thread::{self, JoinHandle}
 };
-use crate::threadpool::threadpool::Threadpool;
+use crate::{
+    request::request::ChatRequest,
+    threadpool::threadpool::Threadpool
+};
 
 type TextLog = Arc<Mutex<Vec<String>>>;
 
 pub struct InMemoryChatBuffer {
     pub text: TextLog,
-    receiver: Receiver<String>,
-    sender: Sender<String>,
+    receiver: Receiver<ChatRequest>,
+    sender: Sender<ChatRequest>,
 }
 
+// TODO: Consider tightly coupling this to ChatRequest
 fn handle_connection(stream: Result<TcpStream, Error>, text: TextLog) -> Result<(), ()> {
     match stream {
         Ok(mut stream_obj) => {
@@ -32,8 +37,8 @@ fn handle_connection(stream: Result<TcpStream, Error>, text: TextLog) -> Result<
                                     "{}\n",
                                     array[start_from..end_at].join("\n")
                                 ).as_bytes()) {
-                                Err(err) => {
-                                    println!("chatlog.rs:39 {:?}", err);
+                                Err(e) => {
+                                    println!("stream write error: {:?}", e);
                                     break;
                                 },
                                 _ => {}
@@ -46,25 +51,9 @@ fn handle_connection(stream: Result<TcpStream, Error>, text: TextLog) -> Result<
                 }
             }
         },
-        Err(e) => { println!("chatlog.rs:49 Connection broke: {:?}", e)},
+        Err(e) => { println!("Connection broke: {:?}", e)},
     }
     Ok(())
-}
-
-pub fn create_listener(text: TextLog, socket: &str) {
-    let listener = TcpListener::bind(socket);
-    let mut tp = Threadpool::new(10000);
-    match listener {
-        Ok(listnr) => {
-            for stream in listnr.incoming() {
-                let cloned_text = text.clone();
-                tp.execute(move || { 
-                    handle_connection(stream, cloned_text).expect("Connection failed");
-                });
-            }
-        },
-        _ => {},
-    };
 }
 
 impl InMemoryChatBuffer {
@@ -78,18 +67,48 @@ impl InMemoryChatBuffer {
     }
 
     // Create Senders that can send data to the chatlog
-    pub fn create_tx(&self) -> Sender<String> {
+    pub fn create_tx(&self) -> Sender<ChatRequest> {
         self.sender.clone()
     }
 
     // Listen for updates to the chatlog (BLOCKING)
     pub fn listen_for_updates(&self) {
-        for string in self.receiver.iter() {
-            // TODO: handle this better
+        for chat_request in self.receiver.iter() {
             match self.text.clone().lock() {
-                Ok(mut arr) => { arr.push(string); },
+                Ok(mut arr) => {
+                    println!("chat_request: {:?}", chat_request.to_log().unwrap());
+                    arr.push(chat_request.to_log().unwrap()); 
+                },
                 _ => { println!("Lock failed when listening for updates"); }
             }
         }
     }
+}
+
+fn create_listener(text: TextLog, socket: &str, executor_count: usize) {
+    let listener = TcpListener::bind(socket);
+    let mut tp = Threadpool::new(executor_count);
+    match listener {
+        Ok(listnr) => {
+            for stream in listnr.incoming() {
+                let cloned_text = text.clone();
+                tp.execute(move || { 
+                    handle_connection(stream, cloned_text).expect("Connection failed");
+                });
+            }
+        },
+        _ => {},
+    };
+}
+
+pub fn create_listening_threads_from_inmemory_buffer(chat_buffer: InMemoryChatBuffer, socket_feed: String) -> (JoinHandle<()>, JoinHandle<()>, Sender<ChatRequest>) {
+    let text = chat_buffer.text.clone();
+    let sender = chat_buffer.create_tx();
+    let handle0 = thread::spawn(move || {
+        chat_buffer.listen_for_updates();
+    });
+    let handle1 = thread::spawn(move|| {
+        create_listener(text, socket_feed.clone().as_str(), 1000);
+    });
+    (handle0, handle1, sender)
 }

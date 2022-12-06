@@ -7,6 +7,7 @@ use std::{
 };
 
 use crate::threadpool::threadpool::Threadpool;
+use crate::request::request::{ChatRequest, ChatRequestStatus};
 
 pub struct Server {
     socket: String,
@@ -14,7 +15,7 @@ pub struct Server {
 }
 
 // BLOCKING
-fn handle_connection(mut stream: TcpStream, tx: Sender<String>) {
+fn handle_connection(mut stream: TcpStream, tx: Sender<ChatRequest>) {
     let buf_reader = BufReader::new(&mut stream);
     let mut body = buf_reader
         .lines()            
@@ -24,10 +25,23 @@ fn handle_connection(mut stream: TcpStream, tx: Sender<String>) {
         });
     loop {
         match body.next() {
-            Some(msg) => { match tx.send(msg) {
-                Ok(()) => { println!("message sent"); }
-                Err(e) => {println!("message send failed: {:?}", e); break; }
-            }},
+            Some(msg) => { 
+                let message = msg.clone();
+                println!("{:?}", &message);
+                let request = ChatRequest::from(message);
+                match request.status {
+                    ChatRequestStatus::Valid => {
+                        println!("success: {:?}", request);
+                        match tx.send(request) {
+                            Err(e) => { println!("message send failed: {:?}", e); break; },
+                            _ => {}
+                        }
+                    },
+                    ChatRequestStatus::Invalid => {
+                        println!("error: {:?}", request);
+                    }
+                }
+            },
             _ => { 
                 println!("connection broken!"); 
                 break; 
@@ -44,7 +58,7 @@ impl Server {
         })
     }
 
-    pub fn start(&self, executor_count: usize, tx: Sender<String>) {
+    pub fn start(&self, executor_count: usize, tx: Sender<ChatRequest>) {
         let mut threadpool = Threadpool::new(executor_count);
         let listener = TcpListener::bind(self.socket.clone());
         match listener {

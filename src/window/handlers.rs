@@ -23,6 +23,7 @@ use crate::window::{
     },
     helpers::*,
 };
+use crate::request::request::{ChatRequest, ChatRequestStatus};
 
 pub fn handle_modified_keys(modifiers: KeyModifiers, code: KeyCode, start_at_row: u16, start_at_column: u16, dimensions: Dimensions) {
     match modifiers {
@@ -107,7 +108,13 @@ pub fn handle_key_codes(cw: &mut ChatInput, modifiers: KeyModifiers, code: KeyCo
             });
         },
         KeyCode::Enter => {
-            let target_string = format!("\r\n{}: {}\r\n", cw.name.clone(), cw.text.clone());
+            let request = ChatRequest {
+                subject: Some(cw.name.clone()),
+                verb: Some("tx".to_string()),
+                object: Some(cw.text.clone()),
+                status: ChatRequestStatus::Valid
+            };
+            let target_string = request.to_string_opt().unwrap();
             stream.write(target_string.as_bytes()).expect("write failed");
             cw.text = "".to_string();
 

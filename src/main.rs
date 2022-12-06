@@ -8,7 +8,7 @@ use std::{
 use crossterm::{
     terminal::{enable_raw_mode}
 };
-use chat_server::window::{
+use chat_service::window::{
     helpers::*,
     NameInput::BasicInputPanel,
     ChatWindow::{

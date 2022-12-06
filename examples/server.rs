@@ -1,5 +1,5 @@
-use chat_server::peer::server::Server;
-use chat_server::peer::chatlog::{InMemoryChatBuffer, create_listener};
+use chat_service::peer::server::Server;
+use chat_service::peer::chatlog::{InMemoryChatBuffer, create_listening_threads_from_inmemory_buffer};
 use std::{
     env::args,
     thread
@@ -17,7 +17,6 @@ fn main() {
         Some(x) => x.clone(),
         _ => String::from("0.0.0.0:8000")
     };  
-
     let executor_count = match cli_args.get(3) {
         Some(x) => match x.parse::<usize>() {
                 Ok(count) => count,
@@ -26,21 +25,13 @@ fn main() {
         _ => DEFAULT_EXECUTOR_COUNT,
     };
     let chat_buffer = InMemoryChatBuffer::new();
-    let text = chat_buffer.text.clone();
-    let tx = chat_buffer.create_tx();
+    let (handle0, handle2, tx) = create_listening_threads_from_inmemory_buffer(chat_buffer, socket_feed);
     let server = Server::new(socket_client);
-    
-    let handle0 = thread::spawn(move || {
-        chat_buffer.listen_for_updates();
-    });
     let handle1 = thread::spawn(move || {
         match server {
-            Some(server) => { server.start(executor_count, tx); },
+            Some(server) => { server.start(executor_count, tx.clone()); },
             _ => { println!("Aborted!"); }
         }
-    });
-    let handle2 = thread::spawn(move|| {
-        create_listener(text, socket_feed.clone().as_str());
     });
     handle0.join().expect("handle0 fail");
     handle1.join().expect("handle1 fail");
