@@ -2,20 +2,23 @@ use std::{
     env::args,
     sync::{Arc, Mutex, mpsc},
     net::{TcpStream},
-    io::{BufReader, BufRead, stdout},
+    io::{BufReader, BufRead, Write, stdout},
     thread
 };
 use crossterm::{
     terminal::{enable_raw_mode}
 };
-use chat_service::window::{
-    helpers::*,
-    NameInput::BasicInputPanel,
-    ChatWindow::{
-        ChatWindow,
-    },
-    ChatInput::{
-        ChatInput,
+use chat_service::{
+    request::request::{ChatRequest, ChatRequestStatus},
+    window::{
+        helpers::*,
+        NameInput::BasicInputPanel,
+        ChatWindow::{
+            ChatWindow,
+        },
+        ChatInput::{
+            ChatInput,
+        }
     }
 };
 
@@ -45,6 +48,7 @@ fn main() {
     };
 
     let mut name = String::new();
+    let mut name_clone = String::new();
     // Fancy UI for adding your name
     {
         enable_raw_mode().expect("fail");
@@ -53,6 +57,7 @@ fn main() {
 
         let value = basic_panel.capture_input();
         name = value.clone();
+        name_clone = value.clone();
     }
 
     // Instantiate and clone ChatWindow with Shared State

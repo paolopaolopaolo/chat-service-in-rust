@@ -47,7 +47,7 @@ use core::str::Bytes;
             object: None,
             status: ChatRequestStatus::Invalid,
         };
-        let parser = match Regex::new(r"\[1:(.+)\]\[2:(.+)\]\[3:(.+)\]") {
+        let parser = match Regex::new(r"\[1:(.*)\]\[2:(.*)\]\[3:(.*)\]") {
             Ok(v) => Some(v),
             _ => None
         };
@@ -88,11 +88,19 @@ use core::str::Bytes;
     pub fn to_log(&self) -> Option<String> {
         match self.status {
             ChatRequestStatus::Valid => {
-                Some(format!(
-                    "{}: {}",
-                    self.subject.as_ref().unwrap().clone(),
-                    self.object.as_ref().unwrap().clone(),
-                ))
+                let verb = self.verb.as_ref().unwrap().as_str();
+                match verb {
+                    "init" => return Some(format!(
+                        "{} is connected!\r\n",
+                        self.subject.as_ref().unwrap().clone(),
+                    )),
+                    "tx" => return Some(format!(
+                        "{}: {}\r\n",
+                        self.subject.as_ref().unwrap().clone(),
+                        self.object.as_ref().unwrap().clone(),
+                    )),
+                    _ => return Some("error".to_string()),
+                }
             },
             _ => None,
         }

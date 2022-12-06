@@ -5,7 +5,8 @@ use std::{
     },
     net::{TcpStream},
     io::{
-        stdout
+        stdout,
+        Write,
     }
 };
 use crossterm::{
@@ -18,10 +19,13 @@ use crossterm::{
     }
 };
 
-use crate::window::{
-    helpers::*,
-    constants::*,
-    handlers::{handle_key_codes, handle_modified_keys},
+use crate::{
+    window::{
+        helpers::*,
+        constants::*,
+        handlers::{handle_key_codes, handle_modified_keys},
+    },
+    request::request::{ChatRequest, ChatRequestStatus},
 };
 
 /**
@@ -58,6 +62,15 @@ impl ChatInput {
 
         match stream {
             Ok(mut stream) => {
+                let request = ChatRequest {
+                    subject: Some(self.name.clone()),
+                    // TODO: make "verb" an enum
+                    verb: Some(String::from("init")),
+                    object: Some(String::from("")),
+                    status: ChatRequestStatus::Valid
+                };
+                let target_string = request.to_string_opt().unwrap();
+                stream.write(target_string.as_bytes()).unwrap();
                 loop {
                     match read() {
                         Ok(ev) => {
