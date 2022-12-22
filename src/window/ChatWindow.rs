@@ -75,13 +75,13 @@ impl ChatWindow {
      */
 
     pub fn scroll_up (&mut self) {
-        if self.current_slice.from - 1 > usize::MIN {
+        if self.current_slice.from > usize::MIN {
             self.current_slice.change(&self.text, self.current_slice.from - 1, self.current_slice.to - 1, self.dimensions.clone());
         }
     }
 
     pub fn scroll_down (&mut self) {
-        if self.current_slice.to + 1 < self.text.len() {
+        if self.current_slice.to + 1 < self.text.len() + 1 {
             self.current_slice.change(&self.text, self.current_slice.from + 1, self.current_slice.to + 1, self.dimensions.clone());
         }
     }

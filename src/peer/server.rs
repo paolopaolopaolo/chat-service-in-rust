@@ -2,7 +2,7 @@
 use std::{
     sync::mpsc::Sender,
     io::{BufReader, BufRead},
-    net::{TcpListener, TcpStream},
+    net::{TcpListener, TcpStream, Shutdown},
     result::Result,
 };
 
@@ -27,18 +27,18 @@ fn handle_connection(mut stream: TcpStream, tx: Sender<ChatRequest>) {
         match body.next() {
             Some(msg) => { 
                 let message = msg.clone();
-                println!("{:?}", &message);
                 let request = ChatRequest::from(message);
                 match request.status {
                     ChatRequestStatus::Valid => {
-                        println!("success: {:?}", request);
                         match tx.send(request) {
-                            Err(e) => { println!("message send failed: {:?}", e); break; },
+                            Err(_) => { break; },
                             _ => {}
                         }
                     },
                     ChatRequestStatus::Invalid => {
                         println!("error: {:?}", request);
+                        stream.shutdown(Shutdown::Both);
+                        break;
                     }
                 }
             },

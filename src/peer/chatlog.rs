@@ -56,6 +56,7 @@ fn handle_connection(stream: Result<TcpStream, Error>, text: TextLog) -> Result<
     Ok(())
 }
 
+//TODO turn functional parts into a trait and re-implement with trait
 impl InMemoryChatBuffer {
     pub fn new() -> InMemoryChatBuffer {
         let (tx, rx) = mpsc::channel();
@@ -76,7 +77,6 @@ impl InMemoryChatBuffer {
         for chat_request in self.receiver.iter() {
             match self.text.clone().lock() {
                 Ok(mut arr) => {
-                    println!("chat_request: {:?}", chat_request.to_log().unwrap());
                     arr.push(chat_request.to_log().unwrap()); 
                 },
                 _ => { println!("Lock failed when listening for updates"); }

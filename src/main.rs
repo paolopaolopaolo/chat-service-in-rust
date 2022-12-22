@@ -6,7 +6,7 @@ use std::{
     thread
 };
 use crossterm::{
-    terminal::{enable_raw_mode}
+    terminal::{enable_raw_mode, disable_raw_mode}
 };
 use chat_service::{
     request::request::{ChatRequest, ChatRequestStatus},
@@ -91,7 +91,10 @@ fn main() {
                         }
                     }
             },
-            Err(v) => {println!("Error: {}", v)}
+            Err(v) => {
+                println!("Error: {}", v);
+                disable_raw_mode();
+            }
         }
     });
 

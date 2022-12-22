@@ -25,7 +25,7 @@ use crate::{
         constants::*,
         handlers::{handle_key_codes, handle_modified_keys},
     },
-    request::request::{ChatRequest, ChatRequestStatus},
+    request::request::{ChatRequest, ChatRequestStatus, ChatRequestVerb},
 };
 
 /**
@@ -64,8 +64,7 @@ impl ChatInput {
             Ok(mut stream) => {
                 let request = ChatRequest {
                     subject: Some(self.name.clone()),
-                    // TODO: make "verb" an enum
-                    verb: Some(String::from("init")),
+                    verb: ChatRequestVerb::INIT,
                     object: Some(String::from("")),
                     status: ChatRequestStatus::Valid
                 };
@@ -76,7 +75,15 @@ impl ChatInput {
                         Ok(ev) => {
                             match ev {
                                 Event::Key(event) => {
-                                    handle_modified_keys(event.modifiers, event.code, self.dimensions.height as u16, start_at_column, self.dimensions.clone());
+                                    handle_modified_keys(
+                                    self,
+                                        event.modifiers,
+                                        event.code,
+                                        &mut stream,
+                                        self.dimensions.height as u16,
+                                        start_at_column,
+                                        self.dimensions.clone()
+                                    );
                                     handle_key_codes(
                                         self,
                                         event.modifiers,
@@ -108,6 +115,7 @@ impl ChatInput {
                     start_at_column,
                     self.dimensions.clone()
                 );
+                disable_raw_mode().expect("disable raw mode failed");
             },
         }
         disable_raw_mode().expect("disable raw mode failed");

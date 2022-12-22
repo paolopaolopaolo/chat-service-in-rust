@@ -1,6 +1,6 @@
 
 use regex::Regex;
-use core::str::Bytes;
+use std::fmt::{Display, Formatter, Error};
 
 /** 
  * Chat Service Request Protocol
@@ -26,28 +26,61 @@ use core::str::Bytes;
 
  #[derive(Debug)]
 
- pub enum ChatRequestStatus {
+pub enum ChatRequestStatus {
     Valid,
     Invalid,
  }
 
  #[derive(Debug)]
- pub struct ChatRequest {
+pub enum ChatRequestVerb {
+    INIT,
+    TX,
+    END,
+    NONE,
+}
+
+impl ChatRequestVerb {
+    pub fn from_str(string: &str) -> ChatRequestVerb {
+        match string {
+            "init" => ChatRequestVerb::INIT,
+            "tx" => ChatRequestVerb::TX,
+            "end" => ChatRequestVerb::END,
+            _ => ChatRequestVerb::NONE
+        }
+    }
+    pub fn to_string(&self) -> &str {
+        match self {
+            ChatRequestVerb::INIT => "init",
+            ChatRequestVerb::TX => "tx",
+            ChatRequestVerb::END => "end",
+            ChatRequestVerb::NONE => "none"
+        }
+    }
+ }
+
+impl Display for ChatRequestVerb {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "{}", self.to_string())
+    }
+}
+
+#[derive(Debug)]
+pub struct ChatRequest {
     pub subject: Option<String>,
-    pub verb: Option<String>,
+    pub verb: ChatRequestVerb,
     pub object: Option<String>,
     pub status: ChatRequestStatus
- }
+}
 
  impl ChatRequest {
     pub fn from(string: String) -> ChatRequest {
         let default_result = ChatRequest {
             subject: None,
-            verb: None,
+            verb: ChatRequestVerb::NONE,
             object: None,
             status: ChatRequestStatus::Invalid,
         };
-        let parser = match Regex::new(r"\[1:(.*)\]\[2:(.*)\]\[3:(.*)\]") {
+        let parser = match Regex::new(r"^\[1:(.*)\]\[2:(.*)\]\[3:(.*)\]$") {
             Ok(v) => Some(v),
             _ => None
         };
@@ -56,7 +89,7 @@ use core::str::Bytes;
                 Some(captures) => {
                     return ChatRequest {
                         subject: Some(captures[1].to_string()),
-                        verb: Some(captures[2].to_string()),
+                        verb: ChatRequestVerb::from_str(&captures[2]),
                         object: Some(captures[3].to_string()),
                         status: ChatRequestStatus::Valid
                     };
@@ -73,7 +106,7 @@ use core::str::Bytes;
                 Some(
                     format!("[1:{}][2:{}][3:{}]\r\n",
                         self.subject.as_ref().unwrap().clone(),
-                        self.verb.as_ref().unwrap().clone(),
+                        self.verb,
                         self.object.as_ref().unwrap().clone()
                     )
                 )
@@ -88,16 +121,19 @@ use core::str::Bytes;
     pub fn to_log(&self) -> Option<String> {
         match self.status {
             ChatRequestStatus::Valid => {
-                let verb = self.verb.as_ref().unwrap().as_str();
-                match verb {
-                    "init" => return Some(format!(
+                match self.verb {
+                    ChatRequestVerb::INIT => return Some(format!(
                         "{} is connected!\r\n",
                         self.subject.as_ref().unwrap().clone(),
                     )),
-                    "tx" => return Some(format!(
+                    ChatRequestVerb::TX => return Some(format!(
                         "{}: {}\r\n",
                         self.subject.as_ref().unwrap().clone(),
                         self.object.as_ref().unwrap().clone(),
+                    )),
+                    ChatRequestVerb::END => return Some(format!(
+                        "{} disconnected!",
+                        self.subject.as_ref().unwrap().clone()
                     )),
                     _ => return Some("error".to_string()),
                 }

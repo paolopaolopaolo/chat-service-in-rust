@@ -1,4 +1,5 @@
 use std::{
+    process,
     sync::mpsc::Sender,
     net::TcpStream,
     io::{
@@ -23,9 +24,9 @@ use crate::window::{
     },
     helpers::*,
 };
-use crate::request::request::{ChatRequest, ChatRequestStatus};
+use crate::request::request::{ChatRequest, ChatRequestStatus, ChatRequestVerb};
 
-pub fn handle_modified_keys(modifiers: KeyModifiers, code: KeyCode, start_at_row: u16, start_at_column: u16, dimensions: Dimensions) {
+pub fn handle_modified_keys(cw: &mut ChatInput, modifiers: KeyModifiers, code: KeyCode, stream: &mut TcpStream, start_at_row: u16, start_at_column: u16, dimensions: Dimensions) {
     match modifiers {
         KeyModifiers::CONTROL => {
             match code {
@@ -34,13 +35,14 @@ pub fn handle_modified_keys(modifiers: KeyModifiers, code: KeyCode, start_at_row
                         'c' => {
                             execute!(stdout(), Clear(ClearType::All)).unwrap();
                             disable_raw_mode().expect("error with disable raw mode");
-                            println_starting_at(
-                                &mut stdout(),
-                                String::from("CTRL + C to exit"),
-                                start_at_row,
-                                start_at_column,
-                                dimensions
-                            );
+                            let request = ChatRequest {
+                                subject: Some(cw.name.clone()),
+                                verb: ChatRequestVerb::END,
+                                object: Some(String::new()),
+                                status: ChatRequestStatus::Valid
+                            };
+                            stream.write(request.to_string_opt().unwrap().as_bytes()).expect("problem writing to stream");
+                            process::exit(0x0100);
                         },
                         _ => {}
                     }
@@ -110,7 +112,7 @@ pub fn handle_key_codes(cw: &mut ChatInput, modifiers: KeyModifiers, code: KeyCo
         KeyCode::Enter => {
             let request = ChatRequest {
                 subject: Some(cw.name.clone()),
-                verb: Some("tx".to_string()),
+                verb: ChatRequestVerb::TX,
                 object: Some(cw.text.clone()),
                 status: ChatRequestStatus::Valid
             };
