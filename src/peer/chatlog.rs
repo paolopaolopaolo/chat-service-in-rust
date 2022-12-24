@@ -22,7 +22,7 @@ pub struct InMemoryChatBuffer {
 }
 
 // TODO: Consider tightly coupling this to ChatRequest
-fn handle_connection(stream: Result<TcpStream, Error>, text: TextLog) -> Result<(), ()> {
+fn handle_connection(stream: Result<TcpStream, Error>, text: TextLog) -> Result<(), Error> {
     match stream {
         Ok(mut stream_obj) => {
             // Adds deduping so we only write what hasn't been written yet.
@@ -73,42 +73,39 @@ impl InMemoryChatBuffer {
     }
 
     // Listen for updates to the chatlog (BLOCKING)
-    pub fn listen_for_updates(&self) {
+    pub fn listen_for_updates(&self) -> Result<(), Error> {
         for chat_request in self.receiver.iter() {
             match self.text.clone().lock() {
                 Ok(mut arr) => {
-                    arr.push(chat_request.to_log().unwrap()); 
+                    arr.push(chat_request.to_log()); 
                 },
-                _ => { println!("Lock failed when listening for updates"); }
+                _ => { println!("Update listener failed"); }
             }
         }
+        Ok(())
     }
 }
 
-fn create_listener(text: TextLog, socket: &str, executor_count: usize) {
-    let listener = TcpListener::bind(socket);
+fn create_listener(text: TextLog, socket: &str, executor_count: usize) -> Result<(), Error> {
+    let listener = TcpListener::bind(socket)?;
     let mut tp = Threadpool::new(executor_count);
-    match listener {
-        Ok(listnr) => {
-            for stream in listnr.incoming() {
-                let cloned_text = text.clone();
-                tp.execute(move || { 
-                    handle_connection(stream, cloned_text).expect("Connection failed");
-                });
-            }
-        },
-        _ => {},
-    };
+    for stream in listener.incoming() {
+        let cloned_text = text.clone();
+        tp.execute(move || { 
+            handle_connection(stream, cloned_text).expect("Connection failed");
+        });
+    }
+    Ok(())
 }
 
-pub fn create_listening_threads_from_inmemory_buffer(chat_buffer: InMemoryChatBuffer, socket_feed: String) -> (JoinHandle<()>, JoinHandle<()>, Sender<ChatRequest>) {
+pub fn create_listening_threads_from_inmemory_buffer(chat_buffer: InMemoryChatBuffer, socket_feed: String) -> (JoinHandle<Result<(), Error>>, JoinHandle<Result<(), Error>>, Sender<ChatRequest>) {
     let text = chat_buffer.text.clone();
     let sender = chat_buffer.create_tx();
     let handle0 = thread::spawn(move || {
-        chat_buffer.listen_for_updates();
+        chat_buffer.listen_for_updates()
     });
     let handle1 = thread::spawn(move|| {
-        create_listener(text, socket_feed.clone().as_str(), 1000);
+        create_listener(text, socket_feed.clone().as_str(), 1000)
     });
     (handle0, handle1, sender)
 }

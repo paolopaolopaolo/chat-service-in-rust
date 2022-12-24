@@ -1,6 +1,6 @@
 use std::{
     net::{TcpStream},
-    io::{BufReader, BufRead},
+    io::{self, BufReader, BufRead},
 };
 // use crate::threadpool::threadpool::Threadpool;
 use regex::Regex;
@@ -16,23 +16,17 @@ pub struct Bot<F>
 
 impl<F> Bot<F> 
     where F: Fn(String, &mut TcpStream) -> Option<()> {
-    pub fn new(wake_pattern: String, listens_port: String, writes_port: String, on_wake: F) -> Result<Bot<F>, String> {
-        if let Ok(listens_on) = TcpStream::connect(listens_port) {
-            if let Ok(writes_to) = TcpStream::connect(writes_port) {
-                return Result::Ok(
-                    Bot {
-                        wake_pattern,
-                        listens_on,
-                        writes_to,
-                        on_wake
-                    }
-                )      
-            } else {
-                Result::Err(String::from("Write server could not connect"))
+    pub fn new(wake_pattern: String, listens_port: String, writes_port: String, on_wake: F) -> Result<Bot<F>, io::Error> {
+        let listens_on = TcpStream::connect(listens_port)?;
+        let writes_to = TcpStream::connect(writes_port)?;
+        return Result::Ok(
+            Bot {
+                wake_pattern,
+                listens_on,
+                writes_to,
+                on_wake
             }
-        } else {
-            Result::Err(String::from("Listen server could not connect"))
-        }
+        );
     }
 
 
@@ -52,25 +46,19 @@ impl<F> Bot<F>
                     },
                 _ => {String::new()}}
             });
-        loop {
-            match lines.next() {
-                Some(line) => {
-                    let pattern = Regex::new(format!("^{} *(.*)$", self.wake_pattern).as_str());
-                    match pattern {
-                        Ok(patt) => {
-                            match patt.captures(line.as_str()) {
-                                Some(arr) => {
-                                    (self.on_wake)(arr[1].to_string(), &mut self.writes_to);
-                                },
-                                _ => {}
-                            }
+        while let Some(line) = lines.next() {
+            let pattern = Regex::new(format!("^{} *(.*)$", self.wake_pattern).as_str());
+            match pattern {
+                Ok(patt) => {
+                    match patt.captures(line.as_str()) {
+                        Some(arr) => {
+                            (self.on_wake)(arr[1].to_string(), &mut self.writes_to);
                         },
-                        Err(err) => {
-                            println!("break: {:?}", err);},
+                        _ => {}
                     }
-                    
                 },
-                _ => {}
+                Err(err) => {
+                    println!("break: {:?}", err);},
             }
         }
     }

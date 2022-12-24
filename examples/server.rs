@@ -16,9 +16,10 @@ use chat_service::{
     }
 };
 use std::{
+    any::Any,
     env::args,
-    thread,
-    io::{Write},
+    thread::{self, JoinHandle},
+    io::{Write, Error},
     time::Duration
 };
 use reqwest;
@@ -50,6 +51,13 @@ fn get_executor_count(cli_args: &Vec<String>) -> usize {
     }
 }
 
+fn flatten_joins(joins: Vec<JoinHandle<Result<(), Error>>>) -> Result<(), Box<dyn Any + Send + 'static>> {
+    for join_handle in joins {
+        join_handle.join()?;
+    }
+    Ok(())
+}
+
 fn main() {
     let cli_args: Vec<String> = args().collect();
     let socket_client = get_socket_client(&cli_args);
@@ -61,10 +69,7 @@ fn main() {
     let (handle0, handle2, tx) = create_listening_threads_from_inmemory_buffer(chat_buffer, socket_feed);
     let server = Server::new(socket_client.as_str());
     let handle1 = thread::spawn(move || {
-        match server {
-            Some(server) => { server.start(executor_count, tx.clone()); },
-            _ => { println!("Aborted!"); }
-        }
+        server.start(executor_count, tx.clone())
     });
 
     // Creates a bot
@@ -125,8 +130,12 @@ fn main() {
         },
         Err(err) => {println!("Error: {}", err);}
     }
-    
-    handle0.join().expect("chatlog listener should have kept running");
-    handle1.join().expect("chat input listener should have kept running");
-    handle2.join().expect("chat feed listener should have kept running");
+    match flatten_joins(vec![
+        handle0,
+        handle1,
+        handle2,
+    ]) {
+        Ok(()) => { println!("Ok!"); },
+        _ => { println!("Not ok!"); }
+    };
 }

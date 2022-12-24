@@ -118,27 +118,39 @@ pub struct ChatRequest {
         
     }
 
-    pub fn to_log(&self) -> Option<String> {
+    pub fn to_log(&self) -> String {
         match self.status {
             ChatRequestStatus::Valid => {
                 match self.verb {
-                    ChatRequestVerb::INIT => return Some(format!(
+                    ChatRequestVerb::INIT => format!(
                         "{} is connected!\r\n",
-                        self.subject.as_ref().unwrap().clone(),
-                    )),
-                    ChatRequestVerb::TX => return Some(format!(
+                        match self.subject.as_ref() {
+                            Some(string) => string,
+                            _ => "(none)",
+                        },
+                    ),
+                    ChatRequestVerb::TX => format!(
                         "{}: {}\r\n",
-                        self.subject.as_ref().unwrap().clone(),
-                        self.object.as_ref().unwrap().clone(),
-                    )),
-                    ChatRequestVerb::END => return Some(format!(
+                        match self.subject.as_ref() {
+                            Some(string) => string,
+                            _ => "(none)"
+                        },
+                        match self.object.as_ref() {
+                            Some(string) => string,
+                            _ => "(none)"
+                        },
+                    ),
+                    ChatRequestVerb::END => format!(
                         "{} disconnected!",
-                        self.subject.as_ref().unwrap().clone()
-                    )),
-                    _ => return Some("error".to_string()),
+                        match self.subject.as_ref() {
+                            Some(string) => string,
+                            _ => "(none)"
+                        }
+                    ),
+                    _ => "error".to_string(),
                 }
             },
-            _ => None,
+            _ => "error".to_string(),
         }
     }
  }

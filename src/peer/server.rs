@@ -1,7 +1,7 @@
 
 use std::{
     sync::mpsc::Sender,
-    io::{BufReader, BufRead},
+    io::{BufReader, BufRead, Error},
     net::{TcpListener, TcpStream, Shutdown},
     result::Result,
 };
@@ -52,31 +52,21 @@ fn handle_connection(mut stream: TcpStream, tx: Sender<ChatRequest>) {
 
 impl Server {
 
-    pub fn new(socket: &str) -> Option<Server> {
-        Some(Server {
+    pub fn new(socket: &str) -> Server {
+        Server {
             socket: String::from(socket),
-        })
-    }
-
-    pub fn start(&self, executor_count: usize, tx: Sender<ChatRequest>) {
-        let mut threadpool = Threadpool::new(executor_count);
-        let listener = TcpListener::bind(self.socket.clone());
-        match listener {
-            Ok(listener) => {
-                for stream in listener.incoming() {
-                    match stream {
-                        Result::Ok(stream) => {
-                            let tx_main = tx.clone();
-                            threadpool.execute(move || {
-                                handle_connection(stream, tx_main);
-                            });
-                        },
-                        Result::Err(err) => println!("Collecting stream failed. Error: {}", err.kind().to_string()),
-                    }
-                }
-            },
-            Err(e) => {println!("{:?}", e)},
         }
     }
 
+    pub fn start(&self, executor_count: usize, tx: Sender<ChatRequest>) -> Result<(), Error> {
+        let mut threadpool = Threadpool::new(executor_count);
+        let listener = TcpListener::bind(self.socket.clone())?;
+        while let Ok((stream, _)) = listener.accept() {
+            let tx_main = tx.clone();
+            threadpool.execute(move || {
+                handle_connection(stream, tx_main);
+            });
+        }
+        Ok(())
+    }
 }
