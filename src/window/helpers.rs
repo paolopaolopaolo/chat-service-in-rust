@@ -1,5 +1,5 @@
 use::std::{
-    io::{Stdout, stdout, Write},
+    io::Stdout,
     sync::{Arc, Mutex, MutexGuard},
     cmp,
 };

@@ -5,17 +5,14 @@ use std::{
     },
     net::{TcpStream},
     io::{
-        stdout,
         Write,
+        Error
     }
 };
 use crossterm::{
     event::{
         read,
         Event,
-    },
-    terminal::{
-        disable_raw_mode,
     }
 };
 
@@ -56,68 +53,48 @@ impl ChatInput {
     }
 
     // BLOCKING
-    pub fn capture_events(&mut self, socket: &str, tx: Sender<WindowActions>) {
-        let mut start_at_column = 0;
-        let stream = TcpStream::connect(socket);
-
-        match stream {
-            Ok(mut stream) => {
-                let request = ChatRequest {
-                    subject: Some(self.name.clone()),
-                    verb: ChatRequestVerb::INIT,
-                    object: Some(String::from("")),
-                    status: ChatRequestStatus::Valid
-                };
-                let target_string = request.to_string_opt().unwrap();
-                stream.write(target_string.as_bytes()).unwrap();
-                loop {
-                    match read() {
-                        Ok(ev) => {
-                            match ev {
-                                Event::Key(event) => {
-                                    handle_modified_keys(
-                                    self,
-                                        event.modifiers,
-                                        event.code,
-                                        &mut stream,
-                                        self.dimensions.height as u16,
-                                        start_at_column,
-                                        self.dimensions.clone()
-                                    );
-                                    handle_key_codes(
-                                        self,
-                                        event.modifiers,
-                                        event.code,
-                                        &mut stream,
-                                        tx.clone(),
-                                        self.dimensions.height as u16 + 1,
-                                        0,
-                                        self.dimensions.clone()
-                                    );
-                                },
-                                Event::Resize(x, y) => {
-                                    tx.clone().send(WindowActions::Resize(x as usize, y as usize - 2)).expect("didn't send resize event");
-                                    self.dimensions.width = x as usize;
-                                    self.dimensions.height = y as usize - 4;
-                                },
-                                _ => { },
-                            }
-                        },
-                        _ => {},
-                    }
-                }
-            },
-            Err(err) => {  
-                println_starting_at(
-                    &mut stdout(),
-                    format!("socket_failed: {:?}", err),
-                    self.dimensions.height as u16 + 12,
-                    start_at_column,
-                    self.dimensions.clone()
-                );
-                disable_raw_mode().expect("disable raw mode failed");
-            },
+    pub fn capture_events(&mut self, socket: &str, tx: Sender<WindowActions>) -> Result<(), Error> {
+        let start_at_column = 0;
+        let mut stream = TcpStream::connect(socket)?;
+        let request = ChatRequest {
+            subject: Some(self.name.clone()),
+            verb: ChatRequestVerb::INIT,
+            object: Some(String::from("")),
+            status: ChatRequestStatus::Valid
+        };
+        let target_string = request.to_string_opt().unwrap();
+        stream.write(target_string.as_bytes())?;
+        while let Ok(ev) = read() {
+            match ev {
+                Event::Key(event) => {
+                    handle_modified_keys(
+                    self,
+                        event.modifiers,
+                        event.code,
+                        &mut stream,
+                        self.dimensions.height as u16,
+                        start_at_column,
+                        self.dimensions.clone()
+                    );
+                    handle_key_codes(
+                        self,
+                        event.modifiers,
+                        event.code,
+                        &mut stream,
+                        tx.clone(),
+                        self.dimensions.height as u16 + 1,
+                        0,
+                        self.dimensions.clone()
+                    );
+                },
+                Event::Resize(x, y) => {
+                    tx.clone().send(WindowActions::Resize(x as usize, y as usize - 2)).expect("didn't send resize event");
+                    self.dimensions.width = x as usize;
+                    self.dimensions.height = y as usize - 4;
+                },
+                _ => { },
+            }
         }
-        disable_raw_mode().expect("disable raw mode failed");
+        Ok(())
     }
 }
