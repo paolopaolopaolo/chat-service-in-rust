@@ -1,10 +1,11 @@
 use std::{
+    // sync::mpsc,
     net::{TcpStream},
     io::{self, BufReader, BufRead},
 };
-// use crate::threadpool::threadpool::Threadpool;
 use regex::Regex;
 
+// TODO: refactor BOT into a trait
 pub struct Bot<F> 
     where F: Fn(String, &mut TcpStream) -> Option<()>
 {
@@ -19,6 +20,7 @@ impl<F> Bot<F>
     pub fn new(wake_pattern: String, listens_port: String, writes_port: String, on_wake: F) -> Result<Bot<F>, io::Error> {
         let listens_on = TcpStream::connect(listens_port)?;
         let writes_to = TcpStream::connect(writes_port)?;
+        // let (thread_spawner, thread_spawn_responder) = mpsc::channel::<u8>();
         return Result::Ok(
             Bot {
                 wake_pattern,
@@ -52,6 +54,7 @@ impl<F> Bot<F>
                 Ok(patt) => {
                     match patt.captures(line.as_str()) {
                         Some(arr) => {
+                            // TODO: Spawn a thread to run the response
                             (self.on_wake)(arr[1].to_string(), &mut self.writes_to);
                         },
                         _ => {}

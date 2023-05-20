@@ -23,30 +23,22 @@ fn handle_connection(mut stream: TcpStream, tx: Sender<ChatRequest>) {
             Ok(it) => it,
             _ => String::from("")
         });
-    loop {
-        match body.next() {
-            Some(msg) => { 
-                let message = msg.clone();
-                let request = ChatRequest::from(message);
-                match request.status {
-                    ChatRequestStatus::Valid => {
-                        match tx.send(request) {
-                            Err(_) => { break; },
-                            _ => {}
-                        }
-                    },
-                    ChatRequestStatus::Invalid => {
-                        println!("error: {:?}", request);
-                        stream.shutdown(Shutdown::Both);
-                        break;
-                    }
+    while let Some(msg) = body.next() {
+        let message = msg.clone();
+        let request = ChatRequest::from(message);
+        match request.status {
+            ChatRequestStatus::Valid => {
+                match tx.send(request) {
+                    Err(_) => { break; },
+                    _ => {}
                 }
             },
-            _ => { 
-                println!("connection broken!"); 
-                break; 
-            },
-        };
+            ChatRequestStatus::Invalid => {
+                println!("error: {:?}", request);
+                stream.shutdown(Shutdown::Both);
+                break;
+            }
+        }
     }
 }
 

@@ -1,3 +1,8 @@
+
+extern crate unicode_width;
+
+use unicode_width::UnicodeWidthStr;
+
 use::std::{
     io::Stdout,
     sync::{Arc, Mutex, MutexGuard},
@@ -64,7 +69,7 @@ pub fn println_starting_at(stdout: &mut Stdout, string: String, start_at: u16, s
             vec![VERT_EDGE],
             vec![' '; 2],
             string.chars().collect(),
-            vec![' '; dimensions.width - 6 - string.len()],
+            vec![' '; dimensions.width - 6 - UnicodeWidthStr::width(string.as_str())],
             vec![VERT_EDGE]
         ].concat())),
         MoveToNextLine(1)
@@ -74,9 +79,10 @@ pub fn println_starting_at(stdout: &mut Stdout, string: String, start_at: u16, s
 // Print multiple lines (from within a chat-feed)
 pub fn printlns(stdout: &mut Stdout, strings: Vec<String>, start_printidx: &mut u16, dimensions: Dimensions) {
     strings.iter().for_each(|string| {
-        let max_length = match string.len() > dimensions.width - 6 {
-            false => dimensions.width - 6 - string.len(),
-            true => dimensions.width - 6
+        let dimensions_sans_padding = dimensions.width - 6;
+        let max_length = match UnicodeWidthStr::width(string.as_str()) > dimensions_sans_padding {
+            false => dimensions_sans_padding - UnicodeWidthStr::width(string.as_str()),
+            true => dimensions_sans_padding
         };
         queue!(
             stdout,
@@ -157,9 +163,10 @@ pub fn split_long_line(text: &String, prefix: &str, dimensions: Dimensions) -> V
 pub fn adjust_text_for_overflow(copy: String, dimensions: Dimensions) -> String {
     let max_input_length = dimensions.width - 6;
     let mut text_to_print = copy.clone();
-    if text_to_print.len() > max_input_length {
-        let start_index = text_to_print.len() - max_input_length;
-        text_to_print = text_to_print[start_index..text_to_print.len()].to_string();
+    if UnicodeWidthStr::width(text_to_print.as_str()) > max_input_length {
+        let start_index = UnicodeWidthStr::width(text_to_print.as_str()) - max_input_length;
+        // TODO: Fix the issue where the index doesn't land on the character boundary sometimes 
+        text_to_print = text_to_print[start_index..UnicodeWidthStr::width(text_to_print.as_str())].to_string();
     }
     text_to_print
 }
@@ -167,7 +174,7 @@ pub fn adjust_text_for_overflow(copy: String, dimensions: Dimensions) -> String 
 
 // Blocking call to get a Mutex-locked Chat-Feed struct
 pub fn lock_chat_window(chat_window: &SharedChatWindow) -> MutexGuard<ChatWindow> {
-    let mut result = None;
+    let mut result: Option<MutexGuard<ChatWindow>> = None;
     while result.is_none() {
         match chat_window.try_lock() {
             Ok(cw) => { result = Some(cw); },

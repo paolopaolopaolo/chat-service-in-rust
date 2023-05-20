@@ -48,7 +48,6 @@ fn main() {
     };
 
     let mut name = String::new();
-    let mut name_clone = String::new();
     // Fancy UI for adding your name
     {
         enable_raw_mode().expect("fail");
@@ -57,10 +56,9 @@ fn main() {
 
         let value = basic_panel.capture_input();
         name = value.clone();
-        name_clone = value.clone();
     }
 
-    // Instantiate and clone ChatWindow with Shared State
+    // Instantiate ChatWindow with Shared State. Clone all instances we need
     let cw: SharedChatWindow = Arc::new(Mutex::new(ChatWindow::new(name.clone(), width, height)));
     let mut cw_clone0: SharedChatWindow = cw.clone();
     let mut cw_clone1: SharedChatWindow = cw.clone();
@@ -81,14 +79,9 @@ fn main() {
                     let mut buf_array = bufreader
                         .lines()
                         .map(|i| i.unwrap());
-                    loop {
-                        match buf_array.next() {
-                            Some(string) => { 
-                                let mut locked_cw = lock_chat_window(&mut cw_clone1);
-                                locked_cw.add_chat_line(string);
-                            },
-                            _ => {},
-                        }
+                    while let Some(string) = buf_array.next() {
+                        let mut locked_cw = lock_chat_window(&mut cw_clone1);
+                        locked_cw.add_chat_line(string);
                     }
             },
             Err(v) => {

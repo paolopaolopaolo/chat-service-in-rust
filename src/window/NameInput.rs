@@ -4,6 +4,10 @@ use std::{
         Write,
     }
 };
+extern crate unicode_width;
+
+use unicode_width::UnicodeWidthStr;
+
 use crossterm::{
     queue,
     cursor::{
@@ -39,7 +43,7 @@ impl BasicInputPanel {
         let width: usize = 25;
         let mut stdout = stdout();
         let q = "What is your name?";
-        let right_trim = vec!['_'; 10 - &self.input_text.len()];
+        let right_trim = vec!['_'; 10 - UnicodeWidthStr::width(self.input_text.as_str())];
         let a = self.input_text.clone();
         let start_q_at = (width - q.len()) / 2;
         let start_a_at = (width - 10) / 2;
@@ -111,35 +115,29 @@ impl BasicInputPanel {
 
     pub fn capture_input(&mut self) -> String {
         let max_char_count: usize = 10;
-        loop {
-            match read() {
-                Ok(ev) => {
-                    match ev {
-                        Event::Key(ev) => {
-                            match ev.code {
-                                KeyCode::Char(character) => {
-                                    if self.input_text.len() < max_char_count {
-                                        self.input_text = format!("{}{}", self.input_text, character);
-                                    }
-                                    self.print();
-                                },
-                                KeyCode::Backspace => {
-                                    if self.input_text.len() > 0 {
-                                        self.input_text = self.input_text[0..self.input_text.len() - 1].to_string();
-                                        self.print();
-                                    }
-                                },
-                                KeyCode::Enter => {
-                                    break;
-                                },
-                                _ => {}
+        while let Ok(ev) = read() {
+            match ev {
+                Event::Key(ev) => {
+                    match ev.code {
+                        KeyCode::Char(character) => {
+                            if self.input_text.len() < max_char_count {
+                                self.input_text = format!("{}{}", self.input_text, character);
+                            }
+                            self.print();
+                        },
+                        KeyCode::Backspace => {
+                            if self.input_text.len() > 0 {
+                                self.input_text = self.input_text[0..self.input_text.len() - 1].to_string();
+                                self.print();
                             }
                         },
-                        _ => {},
-                }
-
-                }
-                _ => {}
+                        KeyCode::Enter => {
+                            break;
+                        },
+                        _ => {}
+                    }
+                },
+                _ => {},
             }
         }
         self.input_text.clone()

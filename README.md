@@ -25,7 +25,7 @@ Simple CLI chat functionality built on TCP. Has server-side and client-side comp
 ### Server-side
 Start at `examples/server.rs` for the server implementation.
 
-Run `cargo run --examples server` to run the server implementation
+Run `cargo run --example server` to run the server implementation
 
 ```
 ChatServer(port 9000)─┬─ChatLog(port8000)                        
